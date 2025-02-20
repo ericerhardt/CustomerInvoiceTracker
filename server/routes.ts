@@ -6,6 +6,7 @@ import { sendInvoiceEmail } from "./email";
 import Stripe from "stripe";
 import sgMail from '@sendgrid/mail';
 import ReactPDF from '@react-pdf/renderer';
+import path from 'path';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -25,12 +26,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
     }
 
-    if (!stripe || stripe._config.apiKey !== settings.stripeSecretKey) {
-      stripe = new Stripe(settings.stripeSecretKey, {
-        apiVersion: '2023-10-16',
-        typescript: true,
-      });
-    }
+    stripe = new Stripe(settings.stripeSecretKey, {
+      apiVersion: '2023-10-16',
+    });
 
     return stripe;
   }
@@ -234,9 +232,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Generate PDF
       try {
-        const pdfBuffer = await ReactPDF.renderToBuffer(
+        const pdfComponent = ReactPDF.renderToFile(
           InvoicePDF({
-            items,
+            items: items.map(item => ({
+              description: item.description,
+              quantity: Number(item.quantity),
+              unitPrice: Number(item.unitPrice)
+            })),
             customer,
             dueDate: invoice.dueDate.toISOString(),
             invoiceNumber: invoice.number,
@@ -244,9 +246,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               companyName: settings?.companyName || '',
               companyAddress: settings?.companyAddress || '',
               companyEmail: settings?.companyEmail || '',
-            },
+            }
           })
         );
+
+        const pdfBuffer = await ReactPDF.renderToBuffer(pdfComponent);
 
         // Send email with PDF attachment
         if (settings?.sendGridApiKey) {
@@ -294,16 +298,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!invoice) return res.sendStatus(404);
       if (invoice.userId !== req.user.id) return res.sendStatus(403);
 
-      // Delete the payment link in Stripe if it exists
+      // Cancel the payment link in Stripe if it exists
       if (invoice.stripePaymentId) {
-        await stripeInstance.paymentLinks.del(invoice.stripePaymentId);
+        try {
+          await stripeInstance.paymentLinks.cancel(invoice.stripePaymentId);
+        } catch (stripeError) {
+          console.error('Failed to cancel Stripe payment link:', stripeError);
+          // Continue even if cancellation fails
+        }
       }
 
       // Update invoice to remove payment link
       const updatedInvoice = await storage.updateInvoicePayment(
         invoice.id,
-        null,
-        null
+        '',  // Empty string instead of null
+        ''   // Empty string instead of null
       );
 
       res.json(updatedInvoice);
@@ -326,7 +335,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const stripeInstance = stripe || new Stripe(process.env.STRIPE_SECRET_KEY!, {
         apiVersion: '2023-10-16',
-        typescript: true,
       });
 
       const event = stripeInstance.webhooks.constructEvent(
