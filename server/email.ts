@@ -6,6 +6,7 @@ interface SendInvoiceEmailParams {
   amount: number;
   dueDate: Date;
   paymentUrl: string;
+  pdfBuffer?: Buffer;
 }
 
 export async function sendInvoiceEmail({
@@ -14,6 +15,7 @@ export async function sendInvoiceEmail({
   amount,
   dueDate,
   paymentUrl,
+  pdfBuffer,
 }: SendInvoiceEmailParams) {
   const formattedAmount = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -51,6 +53,14 @@ export async function sendInvoiceEmail({
           </p>
         </div>
       `,
+      attachments: pdfBuffer ? [
+        {
+          content: pdfBuffer.toString('base64'),
+          filename: `invoice-${invoiceNumber}.pdf`,
+          type: 'application/pdf',
+          disposition: 'attachment',
+        },
+      ] : undefined,
     };
 
     await sgMail.send(msg);

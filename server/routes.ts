@@ -4,8 +4,9 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { sendInvoiceEmail } from "./email";
 import Stripe from "stripe";
-import sgMail from '@sendgrid/mail'; // Added import for SendGrid
-
+import sgMail from '@sendgrid/mail';
+import ReactPDF from '@react-pdf/renderer';
+import { InvoicePDF } from '../client/src/components/InvoicePDF';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -24,12 +25,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
     }
 
-    // Create new instance if key changed or doesn't exist
-    if (!stripe || stripe.getApiField('key') !== settings.stripeSecretKey) {
+    if (!stripe || stripe._config.apiKey !== settings.stripeSecretKey) {
       stripe = new Stripe(settings.stripeSecretKey, {
         apiVersion: '2023-10-16',
         typescript: true,
-        maxNetworkRetries: 2,
       });
     }
 
@@ -198,6 +197,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!invoice) return res.sendStatus(404);
       if (invoice.userId !== req.user.id) return res.sendStatus(403);
 
+      // Get invoice items and customer
+      const items = await storage.getInvoiceItems(invoice.id);
+      const customer = await storage.getCustomer(invoice.customerId);
+      const settings = await storage.getSettingsByUserId(req.user.id);
+
+      if (!customer) {
+        throw new Error('Customer not found');
+      }
+
       // Create new Stripe payment link
       const price = await stripeInstance.prices.create({
         currency: 'usd',
@@ -224,10 +232,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentLink.url
       );
 
-      // Resend email to customer
-      const customer = await storage.getCustomer(invoice.customerId);
-      if (customer) {
-        const settings = await storage.getSettingsByUserId(req.user.id);
+      // Generate PDF
+      try {
+        const pdfBuffer = await ReactPDF.renderToBuffer(
+          InvoicePDF({
+            items,
+            customer,
+            dueDate: invoice.dueDate.toISOString(),
+            invoiceNumber: invoice.number,
+            settings: {
+              companyName: settings?.companyName || '',
+              companyAddress: settings?.companyAddress || '',
+              companyEmail: settings?.companyEmail || '',
+            },
+          })
+        );
+
+        // Send email with PDF attachment
+        if (settings?.sendGridApiKey) {
+          process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
+          await sendInvoiceEmail({
+            to: customer.email,
+            invoiceNumber: invoice.number,
+            amount: Number(invoice.amount),
+            dueDate: invoice.dueDate,
+            paymentUrl: paymentLink.url,
+            pdfBuffer,
+          });
+        }
+      } catch (pdfError) {
+        console.error('Failed to generate PDF:', pdfError);
+        // Continue without PDF if generation fails
         if (settings?.sendGridApiKey) {
           process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
           await sendInvoiceEmail({

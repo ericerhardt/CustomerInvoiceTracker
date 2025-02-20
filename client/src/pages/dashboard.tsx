@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState } from "react";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,13 +12,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { PlusCircle, Trash2, Send } from "lucide-react";
 import { Invoice, Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+const ITEMS_PER_PAGE = 10;
+
 export default function Dashboard() {
   const { toast } = useToast();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
+
   const { data: invoices } = useQuery<Invoice[]>({
     queryKey: ["/api/invoices"],
   });
@@ -54,7 +71,7 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       toast({
         title: "Success",
-        description: "Payment link resent successfully",
+        description: "Invoice and payment link sent successfully",
       });
     },
     onError: (error: Error) => {
@@ -65,6 +82,12 @@ export default function Dashboard() {
       });
     },
   });
+
+  const totalPages = Math.ceil((invoices?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedInvoices = invoices?.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -117,7 +140,7 @@ export default function Dashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoices?.slice(0, 5).map((invoice) => {
+                {paginatedInvoices?.map((invoice) => {
                   const customer = customers?.find(c => c.id === invoice.customerId);
                   return (
                     <TableRow key={invoice.id}>
@@ -155,16 +178,35 @@ export default function Dashboard() {
                                 <Send className="h-4 w-4 mr-1" />
                                 Resend
                               </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => deletePaymentLink.mutate(invoice.id)}
-                                disabled={deletePaymentLink.isPending}
-                                className="text-red-600 hover:text-red-700"
-                              >
-                                <Trash2 className="h-4 w-4 mr-1" />
-                                Delete Link
-                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-1" />
+                                    Delete
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Payment Link</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete this payment link? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deletePaymentLink.mutate(invoice.id)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </>
                           )}
                         </div>
@@ -174,6 +216,30 @@ export default function Dashboard() {
                 })}
               </TableBody>
             </Table>
+
+            {totalPages > 1 && (
+              <div className="flex justify-center gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="py-2 px-4">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </main>
