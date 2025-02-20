@@ -27,6 +27,7 @@ const settingsSchema = z.object({
   companyEmail: z.string().email("Invalid email address"),
   stripeSecretKey: z.string().min(1, "Stripe secret key is required"),
   stripePublicKey: z.string().min(1, "Stripe public key is required"),
+  taxRate: z.coerce.number().min(0, "Tax rate cannot be negative").max(100, "Tax rate cannot exceed 100%"),
 });
 
 type SettingsFormData = z.infer<typeof settingsSchema>;
@@ -52,6 +53,7 @@ export default function Settings() {
       companyEmail: "",
       stripeSecretKey: "",
       stripePublicKey: "",
+      taxRate: 10, // Default tax rate of 10%
     },
   });
 
@@ -63,6 +65,7 @@ export default function Settings() {
         companyEmail: settings.companyEmail || "",
         stripeSecretKey: settings.stripeSecretKey || "",
         stripePublicKey: settings.stripePublicKey || "",
+        taxRate: Number(settings.taxRate) || 10,
       });
     }
   }, [settings, form]);
@@ -154,6 +157,30 @@ export default function Settings() {
                           <FormControl>
                             <Input type="email" {...field} />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="taxRate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tax Rate (%)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              min="0" 
+                              max="100" 
+                              step="0.1" 
+                              {...field}
+                              onChange={(e) => field.onChange(Number(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Enter the tax rate percentage (0-100). This rate will be applied to all invoices.
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
