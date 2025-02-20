@@ -171,14 +171,20 @@ export class DatabaseStorage implements IStorage {
     if (existing) {
       const [updated] = await db
         .update(settings)
-        .set(settingsData)
+        .set({
+          ...settingsData,
+          taxRate: String(settingsData.taxRate), // Convert number to string for decimal column
+        })
         .where(eq(settings.userId, settingsData.userId))
         .returning();
       return updated;
     } else {
       const [created] = await db
         .insert(settings)
-        .values(settingsData)
+        .values({
+          ...settingsData,
+          taxRate: String(settingsData.taxRate), // Convert number to string for decimal column
+        })
         .returning();
       return created;
     }
