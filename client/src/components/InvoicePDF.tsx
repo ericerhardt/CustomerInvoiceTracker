@@ -83,8 +83,8 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }
     return sum + (quantity * price);
   }, 0);
   const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1;
-  const tax = subtotal * taxRate;
-  const total = subtotal + tax;
+  const tax = Number((subtotal * taxRate).toFixed(2)); // Fix to 2 decimal places
+  const total = Number((subtotal + tax).toFixed(2)); // Fix to 2 decimal places
 
   return (
     <Document>
@@ -137,7 +137,7 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }
               <Text style={styles.totalValue}>${subtotal.toFixed(2)}</Text>
             </View>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Tax ({(taxRate * 100).toFixed(1)}%):</Text>
+              <Text style={styles.totalLabel}>Tax ({(taxRate * 100).toFixed(2)}%):</Text>
               <Text style={styles.totalValue}>${tax.toFixed(2)}</Text>
             </View>
             <View style={styles.totalRow}>

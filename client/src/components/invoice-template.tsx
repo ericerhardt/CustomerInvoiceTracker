@@ -36,8 +36,8 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
     return sum + (quantity * price);
   }, 0);
   const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1; // Default to 10% if not set
-  const tax = subtotal * taxRate;
-  const total = subtotal + tax;
+  const tax = Number((subtotal * taxRate).toFixed(2)); // Fix to 2 decimal places
+  const total = Number((subtotal + tax).toFixed(2)); // Fix to 2 decimal places
 
   return (
     <Card className="bg-white">
@@ -127,7 +127,7 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
             <span className="w-32 text-right">${subtotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-end">
-            <span className="w-32 text-muted-foreground">Tax ({(taxRate * 100).toFixed(1)}%):</span>
+            <span className="w-32 text-muted-foreground">Tax ({(taxRate * 100).toFixed(2)}%):</span>
             <span className="w-32 text-right">${tax.toFixed(2)}</span>
           </div>
           <div className="flex justify-end font-bold">
