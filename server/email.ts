@@ -35,12 +35,17 @@ export async function sendInvoiceEmail({
       throw new Error('Invalid SendGrid API key format. Must start with "SG."');
     }
 
+    // Reset the API key to ensure we're using the latest one
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
     const msg = {
-      from: process.env.FROM_EMAIL || 'noreply@example.com',
       to,
+      from: {
+        email: process.env.FROM_EMAIL || 'noreply@example.com',
+        name: 'Invoice System'
+      },
       subject: `Invoice ${invoiceNumber} - Payment Required`,
+      text: `Amount due: ${formattedAmount}\nDue date: ${formattedDate}\nPay now: ${paymentUrl}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Invoice ${invoiceNumber}</h2>
@@ -63,13 +68,21 @@ export async function sendInvoiceEmail({
       ] : undefined,
     };
 
+    console.log('Attempting to send email to:', to);
     await sgMail.send(msg);
     console.log(`Email sent successfully to ${to} for invoice ${invoiceNumber}`);
     return true;
   } catch (error) {
     console.error('Failed to send email:', error);
     if (error instanceof Error) {
-      throw new Error(`Failed to send invoice email: ${error.message}`);
+      const errorMessage = error.message;
+      console.error('SendGrid Error Details:', errorMessage);
+
+      if (errorMessage.includes('Forbidden')) {
+        throw new Error('SendGrid API key is not authorized. Please verify your API key and sender email settings.');
+      }
+
+      throw new Error(`Failed to send invoice email: ${errorMessage}`);
     }
     throw new Error('Failed to send invoice email');
   }
