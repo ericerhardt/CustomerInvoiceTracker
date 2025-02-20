@@ -70,6 +70,10 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
           }))
         }
       );
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to save invoice');
+      }
       return res.json();
     },
     onSuccess: () => {

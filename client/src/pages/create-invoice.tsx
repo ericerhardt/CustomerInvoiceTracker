@@ -18,10 +18,26 @@ export default function CreateInvoice() {
     queryFn: async () => {
       if (!id) return null;
       const res = await apiRequest("GET", `/api/invoices/${id}`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch invoice');
+      }
       return res.json();
     },
     enabled: !!id,
   });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-border" />
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -32,38 +48,32 @@ export default function CreateInvoice() {
           {id ? "Edit Invoice" : "Create Invoice"}
         </h1>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-border" />
-          </div>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Invoice Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="invoice">
-                    {id ? "Edit Invoice" : "Create Invoice"}
-                  </TabsTrigger>
-                  <TabsTrigger value="customer">New Customer</TabsTrigger>
-                </TabsList>
+        <Card>
+          <CardHeader>
+            <CardTitle>Invoice Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="invoice">
+                  {id ? "Edit Invoice" : "Create Invoice"}
+                </TabsTrigger>
+                <TabsTrigger value="customer">New Customer</TabsTrigger>
+              </TabsList>
 
-                <TabsContent value="invoice">
-                  <InvoiceForm 
-                    onSuccess={() => setActiveTab("invoice")} 
-                    invoice={invoice}
-                  />
-                </TabsContent>
+              <TabsContent value="invoice">
+                <InvoiceForm 
+                  onSuccess={() => setActiveTab("invoice")} 
+                  invoice={invoice}
+                />
+              </TabsContent>
 
-                <TabsContent value="customer">
-                  <CustomerForm onSuccess={() => setActiveTab("invoice")} />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        )}
+              <TabsContent value="customer">
+                <CustomerForm onSuccess={() => setActiveTab("invoice")} />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
