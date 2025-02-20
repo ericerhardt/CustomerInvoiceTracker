@@ -1,12 +1,11 @@
-import { users, customers, invoices, invoiceItems } from "@shared/schema";
+import { users, customers, invoices, invoiceItems, settings } from "@shared/schema";
 import type { User, Customer, Invoice, InvoiceItem, InsertUser, InsertCustomer, InsertInvoice, InsertInvoiceItem } from "@shared/schema";
+import type { Settings, InsertSettings } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
-import type { Settings, InsertSettings } from "@shared/schema"; // Assuming Settings type exists
-
 
 const PostgresSessionStore = connectPg(session);
 
@@ -142,8 +141,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSettingsByUserId(userId: number): Promise<Settings | undefined> {
-    const [settings] = await db.select().from(settings).where(eq(settings.userId, userId));
-    return settings;
+    const [userSettings] = await db.select().from(settings).where(eq(settings.userId, userId));
+    return userSettings;
   }
 
   async upsertSettings(settingsData: InsertSettings & { userId: number }): Promise<Settings> {

@@ -36,7 +36,11 @@ export default function Settings() {
 
   const { data: settings } = useQuery({
     queryKey: ["/api/settings"],
-    queryFn: () => apiRequest("GET", "/api/settings"), // Added query function
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/settings");
+      const data = await res.json();
+      return data;
+    },
   });
 
   const form = useForm<SettingsFormData>({
@@ -60,7 +64,8 @@ export default function Settings() {
   const updateSettings = useMutation({
     mutationFn: async (data: SettingsFormData) => {
       const res = await apiRequest("POST", "/api/settings", data);
-      return res.json();
+      const responseData = await res.json();
+      return responseData;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
