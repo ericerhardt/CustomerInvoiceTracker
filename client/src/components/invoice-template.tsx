@@ -35,7 +35,8 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
     const price = Number(item.unitPrice);
     return sum + (quantity * price);
   }, 0);
-  const tax = subtotal * 0.1; // 10% tax
+  const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1; // Default to 10% if not set
+  const tax = subtotal * taxRate;
   const total = subtotal + tax;
 
   return (
@@ -120,18 +121,18 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
           </TableBody>
         </Table>
 
-        <div className="space-y-2 text-right">
+        <div className="space-y-2">
           <div className="flex justify-end">
             <span className="w-32 text-muted-foreground">Subtotal:</span>
-            <span className="w-32">${subtotal.toFixed(2)}</span>
+            <span className="w-32 text-right">${subtotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-end">
-            <span className="w-32 text-muted-foreground">Tax (10%):</span>
-            <span className="w-32">${tax.toFixed(2)}</span>
+            <span className="w-32 text-muted-foreground">Tax ({(taxRate * 100).toFixed(1)}%):</span>
+            <span className="w-32 text-right">${tax.toFixed(2)}</span>
           </div>
           <div className="flex justify-end font-bold">
             <span className="w-32">Total:</span>
-            <span className="w-32">${total.toFixed(2)}</span>
+            <span className="w-32 text-right">${total.toFixed(2)}</span>
           </div>
         </div>
 

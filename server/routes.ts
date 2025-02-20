@@ -167,6 +167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             companyName: settings.companyName || '',
             companyAddress: settings.companyAddress || '',
             companyEmail: settings.companyEmail || '',
+            taxRate: Number(settings.taxRate),
           } : undefined
         });
 
@@ -264,6 +265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             companyName: settings.companyName || '',
             companyAddress: settings.companyAddress || '',
             companyEmail: settings.companyEmail || '',
+            taxRate: Number(settings.taxRate),
           } : undefined
         });
 

@@ -15,6 +15,7 @@ interface InvoicePDFProps {
     companyName: string;
     companyAddress: string;
     companyEmail: string;
+    taxRate?: number;
   };
 }
 
@@ -43,10 +44,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
-  column: {
-    flex: 1,
+  columnLeft: {
+    flex: 2,
   },
-  rightAlign: {
+  columnRight: {
+    flex: 1,
     textAlign: "right",
   },
   bold: {
@@ -58,6 +60,20 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#eee",
   },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    paddingVertical: 5,
+  },
+  totalLabel: {
+    width: "30%",
+    textAlign: "right",
+    paddingRight: 10,
+  },
+  totalValue: {
+    width: "20%",
+    textAlign: "right",
+  },
 });
 
 export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }: InvoicePDFProps) {
@@ -66,7 +82,8 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }
     const price = Number(item.unitPrice);
     return sum + (quantity * price);
   }, 0);
-  const tax = subtotal * 0.1; // 10% tax
+  const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1;
+  const tax = subtotal * taxRate;
   const total = subtotal + tax;
 
   return (
@@ -97,35 +114,35 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }
 
         <View style={styles.section}>
           <View style={[styles.row, styles.bold]}>
-            <Text style={{ flex: 2 }}>Description</Text>
-            <Text style={styles.column}>Quantity</Text>
-            <Text style={styles.column}>Unit Price</Text>
-            <Text style={styles.column}>Amount</Text>
+            <Text style={styles.columnLeft}>Description</Text>
+            <Text style={styles.columnRight}>Quantity</Text>
+            <Text style={styles.columnRight}>Unit Price</Text>
+            <Text style={styles.columnRight}>Amount</Text>
           </View>
 
           {items.map((item, index) => (
             <View key={index} style={styles.row}>
-              <Text style={{ flex: 2 }}>{item.description}</Text>
-              <Text style={styles.column}>{Number(item.quantity)}</Text>
-              <Text style={styles.column}>${Number(item.unitPrice).toFixed(2)}</Text>
-              <Text style={styles.column}>
+              <Text style={styles.columnLeft}>{item.description}</Text>
+              <Text style={styles.columnRight}>{Number(item.quantity)}</Text>
+              <Text style={styles.columnRight}>${Number(item.unitPrice).toFixed(2)}</Text>
+              <Text style={styles.columnRight}>
                 ${(Number(item.quantity) * Number(item.unitPrice)).toFixed(2)}
               </Text>
             </View>
           ))}
 
           <View style={styles.total}>
-            <View style={styles.row}>
-              <Text style={{ flex: 3 }}>Subtotal:</Text>
-              <Text style={styles.column}>${subtotal.toFixed(2)}</Text>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Subtotal:</Text>
+              <Text style={styles.totalValue}>${subtotal.toFixed(2)}</Text>
             </View>
-            <View style={styles.row}>
-              <Text style={{ flex: 3 }}>Tax (10%):</Text>
-              <Text style={styles.column}>${tax.toFixed(2)}</Text>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Tax ({(taxRate * 100).toFixed(1)}%):</Text>
+              <Text style={styles.totalValue}>${tax.toFixed(2)}</Text>
             </View>
-            <View style={styles.row}>
-              <Text style={[{ flex: 3 }, styles.bold]}>Total:</Text>
-              <Text style={[styles.column, styles.bold]}>${total.toFixed(2)}</Text>
+            <View style={styles.totalRow}>
+              <Text style={[styles.totalLabel, styles.bold]}>Total:</Text>
+              <Text style={[styles.totalValue, styles.bold]}>${total.toFixed(2)}</Text>
             </View>
           </View>
         </View>

@@ -61,9 +61,7 @@ export const insertInvoiceSchema = createInsertSchema(invoices)
     dueDate: true,
   })
   .extend({
-    // Convert string date to Date object
     dueDate: z.coerce.date(),
-    // Ensure amount is a number
     amount: z.coerce.number().positive(),
   });
 
@@ -97,6 +95,7 @@ export const settings = pgTable("settings", {
   stripeSecretKey: text("stripe_secret_key").notNull(),
   stripePublicKey: text("stripe_public_key").notNull(),
   sendGridApiKey: text("sendgrid_api_key").notNull(),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default('10'),
 });
 
 export const insertSettingsSchema = createInsertSchema(settings)
@@ -107,6 +106,10 @@ export const insertSettingsSchema = createInsertSchema(settings)
     stripeSecretKey: true,
     stripePublicKey: true,
     sendGridApiKey: true,
+    taxRate: true,
+  })
+  .extend({
+    taxRate: z.coerce.number().min(0).max(100),
   });
 
 export type InsertSettings = z.infer<typeof insertSettingsSchema>;
