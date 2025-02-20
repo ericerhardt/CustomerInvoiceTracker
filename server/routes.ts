@@ -337,30 +337,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) return res.sendStatus(401);
 
     try {
-      // Validate SendGrid API key format
+      // Basic format validation only
       if (req.body.sendGridApiKey && !req.body.sendGridApiKey.startsWith('SG.')) {
         throw new Error('Invalid SendGrid API key format. Must start with "SG."');
+      }
+
+      // Validate Stripe key format if provided
+      if (req.body.stripeSecretKey && !req.body.stripeSecretKey.startsWith('sk_')) {
+        throw new Error('Invalid Stripe secret key format. Must start with "sk_"');
       }
 
       const settings = await storage.upsertSettings({
         ...req.body,
         userId: req.user.id,
       });
-
-      // Test SendGrid configuration if API key is provided
-      if (settings.sendGridApiKey) {
-        sgMail.setApiKey(settings.sendGridApiKey);
-        try {
-          await sgMail.send({
-            to: settings.companyEmail,
-            from: process.env.FROM_EMAIL || settings.companyEmail,
-            subject: 'SendGrid Configuration Test',
-            text: 'This is a test email to verify your SendGrid configuration.',
-          });
-        } catch (emailError) {
-          throw new Error(`SendGrid configuration test failed: ${(emailError as Error).message}`);
-        }
-      }
 
       res.json(settings);
     } catch (error) {
