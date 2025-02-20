@@ -10,6 +10,11 @@ interface InvoicePDFProps {
   customer?: Customer;
   dueDate: string;
   invoiceNumber: string;
+  settings?: {
+    companyName: string;
+    companyAddress: string;
+    companyEmail: string;
+  };
 }
 
 // Create styles
@@ -54,7 +59,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export function InvoicePDF({ items, customer, dueDate, invoiceNumber }: InvoicePDFProps) {
+export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }: InvoicePDFProps) {
   const subtotal = items.reduce((sum, item) => {
     const quantity = Number(item.quantity);
     const price = Number(item.unitPrice);
@@ -73,10 +78,9 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber }: InvoiceP
             <Text>Due Date: {new Date(dueDate).toLocaleDateString()}</Text>
           </View>
           <View>
-            <Text style={styles.bold}>Your Company Name</Text>
-            <Text>123 Business Street</Text>
-            <Text>City, State 12345</Text>
-            <Text>contact@company.com</Text>
+            <Text style={styles.bold}>{settings?.companyName || 'Your Company Name'}</Text>
+            <Text>{settings?.companyAddress || '123 Business Street'}</Text>
+            <Text>{settings?.companyEmail || 'contact@company.com'}</Text>
           </View>
         </View>
 

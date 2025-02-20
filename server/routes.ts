@@ -5,40 +5,34 @@ import { storage } from "./storage";
 import { sendInvoiceEmail } from "./email";
 import Stripe from "stripe";
 
-// Validate Stripe secret key and format
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-if (!stripeKey) {
-  throw new Error("STRIPE_SECRET_KEY environment variable is required");
-}
-if (!stripeKey.startsWith('sk_')) {
-  throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
-}
-
-// Initialize Stripe with proper configuration
-const stripe = new Stripe(stripeKey, {
-  apiVersion: '2023-10-16',
-  typescript: true,
-  maxNetworkRetries: 2, // Add retry logic
-});
-
-// Verify Stripe configuration on startup
-(async function validateStripeConfig() {
-  try {
-    // Make a test API call to verify the key
-    await stripe.paymentMethods.list({ limit: 1 });
-    console.log('Stripe configuration validated successfully');
-  } catch (error) {
-    console.error('Stripe configuration error:', error);
-    if (error instanceof Stripe.errors.StripeError) {
-      console.error('Stripe Error Type:', error.type);
-      console.error('Stripe Error Message:', error.message);
-    }
-    throw error;
-  }
-})();
-
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
+
+  // Initialize Stripe with empty config - will be updated when needed
+  let stripe: Stripe | null = null;
+
+  // Helper function to get or create Stripe instance
+  async function getStripe(userId: number) {
+    const settings = await storage.getSettingsByUserId(userId);
+    if (!settings?.stripeSecretKey) {
+      throw new Error("Stripe secret key not configured. Please add it in settings.");
+    }
+
+    if (!settings.stripeSecretKey.startsWith('sk_')) {
+      throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
+    }
+
+    // Create new instance if key changed or doesn't exist
+    if (!stripe || stripe.getApiField('key') !== settings.stripeSecretKey) {
+      stripe = new Stripe(settings.stripeSecretKey, {
+        apiVersion: '2023-10-16',
+        typescript: true,
+        maxNetworkRetries: 2,
+      });
+    }
+
+    return stripe;
+  }
 
   // Customers
   app.get("/api/customers", async (req, res) => {
@@ -114,6 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) return res.sendStatus(401);
 
     try {
+      const stripeInstance = await getStripe(req.user.id);
       const { items, ...invoiceData } = req.body;
       const invoice = await storage.createInvoice({
         ...invoiceData,
@@ -132,7 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let paymentLink;
       try {
         // First create a price
-        const price = await stripe.prices.create({
+        const price = await stripeInstance.prices.create({
           currency: 'usd',
           unit_amount: Math.round(Number(invoice.amount) * 100),
           product_data: {
@@ -141,7 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         // Then create payment link with the price ID
-        paymentLink = await stripe.paymentLinks.create({
+        paymentLink = await stripeInstance.paymentLinks.create({
           line_items: [{
             price: price.id,
             quantity: 1,
@@ -166,16 +161,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentLink.url
       );
 
-      // Send email to customer
+      // Send email to customer using settings
       const customer = await storage.getCustomer(invoice.customerId);
       if (customer) {
-        await sendInvoiceEmail({
-          to: customer.email,
-          invoiceNumber: invoice.number,
-          amount: Number(invoice.amount),
-          dueDate: invoice.dueDate,
-          paymentUrl: paymentLink.url,
-        });
+        const settings = await storage.getSettingsByUserId(req.user.id);
+        if (settings?.sendGridApiKey) {
+          process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
+          await sendInvoiceEmail({
+            to: customer.email,
+            invoiceNumber: invoice.number,
+            amount: Number(invoice.amount),
+            dueDate: invoice.dueDate,
+            paymentUrl: paymentLink.url,
+          });
+        }
       }
 
       res.status(201).json(updatedInvoice);
@@ -192,12 +191,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) return res.sendStatus(401);
 
     try {
+      const stripeInstance = await getStripe(req.user.id);
       const invoice = await storage.getInvoice(parseInt(req.params.id));
       if (!invoice) return res.sendStatus(404);
       if (invoice.userId !== req.user.id) return res.sendStatus(403);
 
       // Create new Stripe payment link
-      const price = await stripe.prices.create({
+      const price = await stripeInstance.prices.create({
         currency: 'usd',
         unit_amount: Math.round(Number(invoice.amount) * 100),
         product_data: {
@@ -205,7 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      const paymentLink = await stripe.paymentLinks.create({
+      const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
           price: price.id,
           quantity: 1,
@@ -225,13 +225,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Resend email to customer
       const customer = await storage.getCustomer(invoice.customerId);
       if (customer) {
-        await sendInvoiceEmail({
-          to: customer.email,
-          invoiceNumber: invoice.number,
-          amount: Number(invoice.amount),
-          dueDate: invoice.dueDate,
-          paymentUrl: paymentLink.url,
-        });
+        const settings = await storage.getSettingsByUserId(req.user.id);
+        if (settings?.sendGridApiKey) {
+          process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
+          await sendInvoiceEmail({
+            to: customer.email,
+            invoiceNumber: invoice.number,
+            amount: Number(invoice.amount),
+            dueDate: invoice.dueDate,
+            paymentUrl: paymentLink.url,
+          });
+        }
       }
 
       res.json(updatedInvoice);
@@ -248,13 +252,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) return res.sendStatus(401);
 
     try {
+      const stripeInstance = await getStripe(req.user.id);
       const invoice = await storage.getInvoice(parseInt(req.params.id));
       if (!invoice) return res.sendStatus(404);
       if (invoice.userId !== req.user.id) return res.sendStatus(403);
 
       // Delete the payment link in Stripe if it exists
       if (invoice.stripePaymentId) {
-        await stripe.paymentLinks.del(invoice.stripePaymentId);
+        await stripeInstance.paymentLinks.del(invoice.stripePaymentId);
       }
 
       // Update invoice to remove payment link
@@ -282,7 +287,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const event = stripe.webhooks.constructEvent(
+      const stripeInstance = stripe || new Stripe(process.env.STRIPE_SECRET_KEY!, {
+        apiVersion: '2023-10-16',
+        typescript: true,
+      });
+
+      const event = stripeInstance.webhooks.constructEvent(
         req.body,
         sig,
         process.env.STRIPE_WEBHOOK_SECRET
@@ -305,7 +315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add this endpoint to handle settings updates
+  // Settings endpoints remain unchanged
   app.get("/api/settings", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
 
@@ -329,18 +339,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId: req.user.id,
       });
-
-      // Update stripe configuration
-      if (settings.stripeSecretKey !== process.env.STRIPE_SECRET_KEY) {
-        process.env.STRIPE_SECRET_KEY = settings.stripeSecretKey;
-        stripe.setApiKey(settings.stripeSecretKey);
-      }
-
-      // Update SendGrid configuration if needed
-      if (settings.sendGridApiKey !== process.env.SENDGRID_API_KEY) {
-        process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
-      }
-
       res.json(settings);
     } catch (error) {
       console.error('Failed to update settings:', error);

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import { InvoicePDF } from "./InvoicePDF";
+import { useQuery } from "@tanstack/react-query";
 import {
   Table,
   TableBody,
@@ -25,6 +26,10 @@ interface InvoiceTemplateProps {
 }
 
 export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRAFT" }: InvoiceTemplateProps) {
+  const { data: settings } = useQuery({
+    queryKey: ["/api/settings"],
+  });
+
   const subtotal = items.reduce((sum, item) => {
     const quantity = Number(item.quantity);
     const price = Number(item.unitPrice);
@@ -48,11 +53,10 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
           </div>
           <div className="space-y-4">
             <div className="text-right">
-              <h3 className="font-semibold">Your Company Name</h3>
+              <h3 className="font-semibold">{settings?.companyName || 'Your Company Name'}</h3>
               <p className="text-sm text-muted-foreground">
-                123 Business Street<br />
-                City, State 12345<br />
-                contact@company.com
+                {settings?.companyAddress || '123 Business Street'}<br />
+                {settings?.companyEmail || 'contact@company.com'}
               </p>
             </div>
             <PDFDownloadLink
@@ -62,6 +66,7 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
                   customer={customer}
                   dueDate={dueDate}
                   invoiceNumber={invoiceNumber}
+                  settings={settings}
                 />
               }
               fileName={`invoice-${invoiceNumber}.pdf`}
