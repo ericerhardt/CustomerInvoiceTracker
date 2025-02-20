@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { Customer } from "@shared/schema";
 
 interface InvoicePDFProps {
@@ -55,7 +55,11 @@ const styles = StyleSheet.create({
 });
 
 export function InvoicePDF({ items, customer, dueDate, invoiceNumber }: InvoicePDFProps) {
-  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const subtotal = items.reduce((sum, item) => {
+    const quantity = Number(item.quantity);
+    const price = Number(item.unitPrice);
+    return sum + (quantity * price);
+  }, 0);
   const tax = subtotal * 0.1; // 10% tax
   const total = subtotal + tax;
 
@@ -97,10 +101,10 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber }: InvoiceP
           {items.map((item, index) => (
             <View key={index} style={styles.row}>
               <Text style={{ flex: 2 }}>{item.description}</Text>
-              <Text style={styles.column}>{item.quantity}</Text>
-              <Text style={styles.column}>${item.unitPrice.toFixed(2)}</Text>
+              <Text style={styles.column}>{Number(item.quantity)}</Text>
+              <Text style={styles.column}>${Number(item.unitPrice).toFixed(2)}</Text>
               <Text style={styles.column}>
-                ${(item.quantity * item.unitPrice).toFixed(2)}
+                ${(Number(item.quantity) * Number(item.unitPrice)).toFixed(2)}
               </Text>
             </View>
           ))}

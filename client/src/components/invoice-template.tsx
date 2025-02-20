@@ -25,7 +25,11 @@ interface InvoiceTemplateProps {
 }
 
 export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRAFT" }: InvoiceTemplateProps) {
-  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const subtotal = items.reduce((sum, item) => {
+    const quantity = Number(item.quantity);
+    const price = Number(item.unitPrice);
+    return sum + (quantity * price);
+  }, 0);
   const tax = subtotal * 0.1; // 10% tax
   const total = subtotal + tax;
 
@@ -99,12 +103,12 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
             {items.map((item, index) => (
               <TableRow key={index}>
                 <TableCell>{item.description}</TableCell>
-                <TableCell className="text-right">{item.quantity}</TableCell>
+                <TableCell className="text-right">{Number(item.quantity)}</TableCell>
                 <TableCell className="text-right">
-                  ${item.unitPrice.toFixed(2)}
+                  ${Number(item.unitPrice).toFixed(2)}
                 </TableCell>
                 <TableCell className="text-right">
-                  ${(item.quantity * item.unitPrice).toFixed(2)}
+                  ${(Number(item.quantity) * Number(item.unitPrice)).toFixed(2)}
                 </TableCell>
               </TableRow>
             ))}
