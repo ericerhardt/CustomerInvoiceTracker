@@ -42,16 +42,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const invoice = await storage.getInvoice(parseInt(req.params.id));
     if (!invoice) return res.sendStatus(404);
     if (invoice.userId !== req.user.id) return res.sendStatus(403);
-    
+
     const items = await storage.getInvoiceItems(invoice.id);
     const customer = await storage.getCustomer(invoice.customerId);
-    
+
     res.json({ ...invoice, items, customer });
   });
 
   app.post("/api/invoices", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
-    
+
     const { items, ...invoiceData } = req.body;
     const invoice = await storage.createInvoice({
       ...invoiceData,
@@ -68,14 +68,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Create Stripe payment link
     const paymentLink = await stripe.paymentLinks.create({
       line_items: [{
+        quantity: 1,
         price_data: {
-          currency: 'usd',
           product_data: {
             name: `Invoice ${invoice.number}`,
           },
-          unit_amount: Math.round(invoice.amount * 100),
+          unit_amount: Math.round(Number(invoice.amount) * 100), 
+          currency: 'usd',
         },
-        quantity: 1,
       }],
       metadata: {
         invoiceId: invoice.id.toString(),
@@ -95,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await sendInvoiceEmail({
         to: customer.email,
         invoiceNumber: invoice.number,
-        amount: invoice.amount,
+        amount: Number(invoice.amount),
         dueDate: invoice.dueDate,
         paymentUrl: paymentLink.url,
       });
@@ -121,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (event.type === 'payment_intent.succeeded') {
       const paymentIntent = event.data.object;
       const invoiceId = paymentIntent.metadata.invoiceId;
-      
+
       if (invoiceId) {
         await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
       }
