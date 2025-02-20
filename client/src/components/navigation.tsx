@@ -18,21 +18,21 @@ export function Navigation() {
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center space-x-8">
             <Link href="/">
-              <a className="text-xl font-bold text-primary">Invoice Gen</a>
+              <span className="text-xl font-bold text-primary cursor-pointer">Invoice Gen</span>
             </Link>
 
             <div className="hidden md:flex items-center space-x-4">
               <Link href="/">
-                <a className="flex items-center space-x-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                <span className="flex items-center space-x-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
                   <Home className="h-4 w-4" />
                   <span>Dashboard</span>
-                </a>
+                </span>
               </Link>
               <Link href="/create-invoice">
-                <a className="flex items-center space-x-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                <span className="flex items-center space-x-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
                   <FileText className="h-4 w-4" />
                   <span>Create Invoice</span>
-                </a>
+                </span>
               </Link>
             </div>
           </div>
@@ -41,7 +41,7 @@ export function Navigation() {
             <span className="hidden md:inline-block text-sm text-muted-foreground">
               Welcome, {user?.username}
             </span>
-            
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
