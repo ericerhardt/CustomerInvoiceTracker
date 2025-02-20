@@ -110,14 +110,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!invoice) return res.sendStatus(404);
       if (invoice.userId !== req.user.id) return res.sendStatus(403);
 
-      // If there's a Stripe payment link, cancel it
+      // If there's a Stripe payment link, expire it
       if (invoice.stripePaymentId) {
         const stripeInstance = await getStripe(req.user.id);
         try {
-          await stripeInstance.paymentLinks.cancel(invoice.stripePaymentId);
+          await stripeInstance.paymentLinks.expire(invoice.stripePaymentId);
         } catch (stripeError) {
-          console.error('Failed to cancel Stripe payment link:', stripeError);
-          // Continue even if cancellation fails
+          console.error('Failed to expire Stripe payment link:', stripeError);
+          // Continue even if expiration fails
         }
       }
 
@@ -346,13 +346,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!invoice) return res.sendStatus(404);
       if (invoice.userId !== req.user.id) return res.sendStatus(403);
 
-      // Cancel the payment link in Stripe if it exists
+      // Expire the payment link in Stripe if it exists
       if (invoice.stripePaymentId) {
         try {
-          await stripeInstance.paymentLinks.cancel(invoice.stripePaymentId);
+          await stripeInstance.paymentLinks.expire(invoice.stripePaymentId);
         } catch (stripeError) {
-          console.error('Failed to cancel Stripe payment link:', stripeError);
-          // Continue even if cancellation fails
+          console.error('Failed to expire Stripe payment link:', stripeError);
+          // Continue even if expiration fails
         }
       }
 
