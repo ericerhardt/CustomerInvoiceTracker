@@ -9,7 +9,10 @@ if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("STRIPE_SECRET_KEY environment variable is required");
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Update Stripe instantiation with API version
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2023-10-16', // Specify the latest stable API version
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -77,6 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               unit_amount: Math.round(Number(invoice.amount) * 100),
               product_data: {
                 name: `Invoice ${invoice.number}`,
+                description: 'Payment for invoice',
               },
             },
             quantity: 1,
