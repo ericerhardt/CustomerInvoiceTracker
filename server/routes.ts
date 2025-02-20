@@ -96,16 +96,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create Stripe payment link with better error handling
       let paymentLink;
       try {
+        // First create a price
+        const price = await stripe.prices.create({
+          currency: 'usd',
+          unit_amount: Math.round(Number(invoice.amount) * 100),
+          product_data: {
+            name: `Invoice ${invoice.number}`,
+          },
+        });
+
+        // Then create payment link with the price ID
         paymentLink = await stripe.paymentLinks.create({
           line_items: [{
+            price: price.id,
             quantity: 1,
-            price_data: {
-              currency: 'usd',
-              unit_amount: Math.round(Number(invoice.amount) * 100),
-              product_data: {
-                name: `Invoice ${invoice.number}`,
-              },
-            },
           }],
           metadata: {
             invoiceId: invoice.id.toString(),
