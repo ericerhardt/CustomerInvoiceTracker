@@ -121,12 +121,18 @@ export default function Dashboard() {
                   const customer = customers?.find(c => c.id === invoice.customerId);
                   return (
                     <TableRow key={invoice.id}>
-                      <TableCell>{invoice.number}</TableCell>
+                      <TableCell>
+                        <Link href={`/invoice/${invoice.id}`}>
+                          <span className="text-primary hover:underline cursor-pointer">
+                            {invoice.number}
+                          </span>
+                        </Link>
+                      </TableCell>
                       <TableCell>{customer?.name}</TableCell>
                       <TableCell>${Number(invoice.amount).toFixed(2)}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 rounded-full text-xs ${
-                          invoice.status === 'paid' 
+                          invoice.status === 'paid'
                             ? 'bg-green-100 text-green-800'
                             : 'bg-yellow-100 text-yellow-800'
                         }`}>

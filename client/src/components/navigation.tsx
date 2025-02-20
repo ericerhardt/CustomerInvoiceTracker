@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FileText, Home, LogOut, User } from "lucide-react";
+import { FileText, Home, LogOut, Settings, User } from "lucide-react";
 
 export function Navigation() {
   const { user, logoutMutation } = useAuth();
@@ -49,6 +49,12 @@ export function Navigation() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <Link href="/settings">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </DropdownMenuItem>
+                </Link>
                 <DropdownMenuItem 
                   className="text-destructive focus:text-destructive cursor-pointer"
                   onClick={() => logoutMutation.mutate()}
