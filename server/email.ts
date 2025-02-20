@@ -41,7 +41,7 @@ export async function sendInvoiceEmail({
     const msg = {
       to,
       from: {
-        email: process.env.FROM_EMAIL || 'noreply@example.com',
+        email: process.env.SEND_FROM_EMAIL || 'eric.erhardt@e3dev.solutions',
         name: 'Invoice System'
       },
       subject: `Invoice ${invoiceNumber} - Payment Required`,
@@ -69,6 +69,7 @@ export async function sendInvoiceEmail({
     };
 
     console.log('Attempting to send email to:', to);
+    console.log('Using sender email:', process.env.SEND_FROM_EMAIL || 'eric.erhardt@e3dev.solutions');
     await sgMail.send(msg);
     console.log(`Email sent successfully to ${to} for invoice ${invoiceNumber}`);
     return true;
