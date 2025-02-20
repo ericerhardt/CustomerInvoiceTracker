@@ -83,6 +83,7 @@ export class DatabaseStorage implements IStorage {
         createdAt: new Date(),
         stripePaymentId: null,
         stripePaymentUrl: null,
+        dueDate: new Date(invoice.dueDate), // Ensure dueDate is a Date object
       })
       .returning();
     return newInvoice;
@@ -119,7 +120,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> {
-    const [newItem] = await db.insert(invoiceItems).values(item).returning();
+    const [newItem] = await db
+      .insert(invoiceItems)
+      .values({
+        ...item,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
+      })
+      .returning();
     return newItem;
   }
 
