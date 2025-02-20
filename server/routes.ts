@@ -75,6 +75,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ...invoice, items, customer });
   });
 
+  app.patch("/api/invoices/:id", async (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+
+    try {
+      const invoice = await storage.getInvoice(parseInt(req.params.id));
+      if (!invoice) return res.sendStatus(404);
+      if (invoice.userId !== req.user.id) return res.sendStatus(403);
+
+      const { items, ...invoiceData } = req.body;
+
+      // Update invoice
+      const updatedInvoice = await storage.updateInvoice(invoice.id, {
+        ...invoiceData,
+        userId: req.user.id,
+      });
+
+      // Update invoice items
+      await storage.deleteInvoiceItems(invoice.id);
+      for (const item of items) {
+        await storage.createInvoiceItem({
+          ...item,
+          invoiceId: invoice.id,
+        });
+      }
+
+      res.json(updatedInvoice);
+    } catch (error) {
+      console.error('Failed to update invoice:', error);
+      res.status(500).json({
+        message: 'Failed to update invoice',
+        error: (error as Error).message
+      });
+    }
+  });
+
   app.post("/api/invoices", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
 

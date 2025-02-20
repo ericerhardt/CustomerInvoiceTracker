@@ -26,10 +26,12 @@ export interface IStorage {
   getInvoice(id: number): Promise<Invoice | undefined>;
   updateInvoiceStatus(id: number, status: string): Promise<Invoice>;
   updateInvoicePayment(id: number, paymentId: string, paymentUrl: string): Promise<Invoice>;
+  updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice>;
 
   // Invoice items
   createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem>;
   getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]>;
+  deleteInvoiceItems(invoiceId: number): Promise<void>;
 
   // Settings operations
   getSettingsByUserId(userId: number): Promise<Settings | undefined>;
@@ -124,6 +126,18 @@ export class DatabaseStorage implements IStorage {
     return invoice;
   }
 
+  async updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
+    const [updatedInvoice] = await db
+      .update(invoices)
+      .set({
+        ...invoice,
+        dueDate: new Date(invoice.dueDate),
+      })
+      .where(eq(invoices.id, id))
+      .returning();
+    return updatedInvoice;
+  }
+
   async createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> {
     const [newItem] = await db
       .insert(invoiceItems)
@@ -138,6 +152,12 @@ export class DatabaseStorage implements IStorage {
 
   async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
     return await db.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
+  }
+
+  async deleteInvoiceItems(invoiceId: number): Promise<void> {
+    await db
+      .delete(invoiceItems)
+      .where(eq(invoiceItems.invoiceId, invoiceId));
   }
 
   async getSettingsByUserId(userId: number): Promise<Settings | undefined> {

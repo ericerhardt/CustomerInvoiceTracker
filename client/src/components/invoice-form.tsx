@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { insertInvoiceSchema, type InsertInvoice, type Customer } from "@shared/schema";
+import { insertInvoiceSchema, type InsertInvoice, type Customer, type Invoice } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -23,11 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { InvoiceTemplate } from "./invoice-template";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface InvoiceFormProps {
   onSuccess?: () => void;
-  invoice?: any;
+  invoice?: Invoice & { items: Array<{ description: string; quantity: number; unitPrice: number; }> };
 }
 
 export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
@@ -39,32 +39,44 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
     queryKey: ["/api/customers"],
   });
 
+  useEffect(() => {
+    if (invoice?.items) {
+      setItems(invoice.items);
+    }
+  }, [invoice]);
+
   const form = useForm<InsertInvoice>({
     resolver: zodResolver(insertInvoiceSchema),
     defaultValues: {
-      customerId: 0,
-      amount: 0,
-      dueDate: new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
+      customerId: invoice?.customerId || 0,
+      amount: invoice?.amount || 0,
+      dueDate: invoice?.dueDate 
+        ? new Date(invoice.dueDate).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
     },
   });
 
   const createInvoice = useMutation({
     mutationFn: async (data: InsertInvoice) => {
-      const res = await apiRequest("POST", "/api/invoices", { 
-        ...data,
-        items: items.map(item => ({
-          ...item,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice)
-        }))
-      });
+      const res = await apiRequest(
+        invoice ? "PATCH" : "POST",
+        invoice ? `/api/invoices/${invoice.id}` : "/api/invoices",
+        { 
+          ...data,
+          items: items.map(item => ({
+            ...item,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unitPrice)
+          }))
+        }
+      );
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       toast({
         title: "Success",
-        description: "Invoice created successfully",
+        description: invoice ? "Invoice updated successfully" : "Invoice created successfully",
       });
       setLocation("/");
     },
@@ -138,7 +150,6 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
                   <Input 
                     type="date" 
                     {...field}
-                    value={field.value}
                   />
                 </FormControl>
                 <FormMessage />
@@ -200,7 +211,9 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
           />
 
           <Button type="submit" className="w-full" disabled={createInvoice.isPending}>
-            {createInvoice.isPending ? "Creating..." : "Create Invoice"}
+            {createInvoice.isPending 
+              ? (invoice ? "Updating..." : "Creating...") 
+              : (invoice ? "Update Invoice" : "Create Invoice")}
           </Button>
         </form>
       </Form>
