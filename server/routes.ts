@@ -5,14 +5,37 @@ import { storage } from "./storage";
 import { sendInvoiceEmail } from "./email";
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
+// Validate Stripe secret key and format
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+if (!stripeKey) {
   throw new Error("STRIPE_SECRET_KEY environment variable is required");
 }
+if (!stripeKey.startsWith('sk_')) {
+  throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
+}
 
-// Update Stripe instantiation with API version
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2023-10-16', // Specify the latest stable API version
+// Initialize Stripe with proper configuration
+const stripe = new Stripe(stripeKey, {
+  apiVersion: '2023-10-16',
+  typescript: true,
+  maxNetworkRetries: 2, // Add retry logic
 });
+
+// Verify Stripe configuration on startup
+(async function validateStripeConfig() {
+  try {
+    // Make a test API call to verify the key
+    await stripe.paymentMethods.list({ limit: 1 });
+    console.log('Stripe configuration validated successfully');
+  } catch (error) {
+    console.error('Stripe configuration error:', error);
+    if (error instanceof Stripe.errors.StripeError) {
+      console.error('Stripe Error Type:', error.type);
+      console.error('Stripe Error Message:', error.message);
+    }
+    throw error;
+  }
+})();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -70,7 +93,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create Stripe payment link
+      // Create Stripe payment link with better error handling
       let paymentLink;
       try {
         paymentLink = await stripe.paymentLinks.create({
@@ -91,6 +114,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } catch (error) {
         console.error('Stripe payment link creation failed:', error);
+        if (error instanceof Stripe.errors.StripeError) {
+          console.error('Stripe Error Type:', error.type);
+          console.error('Stripe Error Message:', error.message);
+        }
         throw new Error('Failed to create payment link');
       }
 
