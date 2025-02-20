@@ -87,3 +87,27 @@ export type User = typeof users.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;
 export type InvoiceItem = typeof invoiceItems.$inferSelect;
+
+export const settings = pgTable("settings", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  companyName: text("company_name").notNull(),
+  companyAddress: text("company_address").notNull(),
+  companyEmail: text("company_email").notNull(),
+  stripeSecretKey: text("stripe_secret_key").notNull(),
+  stripePublicKey: text("stripe_public_key").notNull(),
+  sendGridApiKey: text("sendgrid_api_key").notNull(),
+});
+
+export const insertSettingsSchema = createInsertSchema(settings)
+  .pick({
+    companyName: true,
+    companyAddress: true,
+    companyEmail: true,
+    stripeSecretKey: true,
+    stripePublicKey: true,
+    sendGridApiKey: true,
+  });
+
+export type InsertSettings = z.infer<typeof insertSettingsSchema>;
+export type Settings = typeof settings.$inferSelect;

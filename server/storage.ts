@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
+import type { Settings, InsertSettings } from "@shared/schema"; // Assuming Settings type exists
+
 
 const PostgresSessionStore = connectPg(session);
 
@@ -29,6 +31,10 @@ export interface IStorage {
   // Invoice items
   createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem>;
   getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]>;
+
+  // Settings operations
+  getSettingsByUserId(userId: number): Promise<Settings | undefined>;
+  upsertSettings(settings: InsertSettings & { userId: number }): Promise<Settings>;
 
   sessionStore: session.Store;
 }
@@ -83,7 +89,7 @@ export class DatabaseStorage implements IStorage {
         createdAt: new Date(),
         stripePaymentId: null,
         stripePaymentUrl: null,
-        dueDate: new Date(invoice.dueDate), // Ensure dueDate is a Date object
+        dueDate: new Date(invoice.dueDate), 
       })
       .returning();
     return newInvoice;
@@ -133,6 +139,30 @@ export class DatabaseStorage implements IStorage {
 
   async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
     return await db.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
+  }
+
+  async getSettingsByUserId(userId: number): Promise<Settings | undefined> {
+    const [settings] = await db.select().from(settings).where(eq(settings.userId, userId));
+    return settings;
+  }
+
+  async upsertSettings(settingsData: InsertSettings & { userId: number }): Promise<Settings> {
+    const existing = await this.getSettingsByUserId(settingsData.userId);
+
+    if (existing) {
+      const [updated] = await db
+        .update(settings)
+        .set(settingsData)
+        .where(eq(settings.userId, settingsData.userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(settings)
+        .values(settingsData)
+        .returning();
+      return created;
+    }
   }
 }
 

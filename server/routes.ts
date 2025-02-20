@@ -270,6 +270,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this endpoint to handle settings updates
+  app.get("/api/settings", async (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+
+    try {
+      const settings = await storage.getSettingsByUserId(req.user.id);
+      res.json(settings || {});
+    } catch (error) {
+      console.error('Failed to get settings:', error);
+      res.status(500).json({
+        message: 'Failed to get settings',
+        error: (error as Error).message
+      });
+    }
+  });
+
+  app.post("/api/settings", async (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+
+    try {
+      const settings = await storage.upsertSettings({
+        ...req.body,
+        userId: req.user.id,
+      });
+
+      // Update stripe configuration
+      if (settings.stripeSecretKey !== process.env.STRIPE_SECRET_KEY) {
+        process.env.STRIPE_SECRET_KEY = settings.stripeSecretKey;
+        stripe.setApiKey(settings.stripeSecretKey);
+      }
+
+      // Update SendGrid configuration if needed
+      if (settings.sendGridApiKey !== process.env.SENDGRID_API_KEY) {
+        process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
+      }
+
+      res.json(settings);
+    } catch (error) {
+      console.error('Failed to update settings:', error);
+      res.status(500).json({
+        message: 'Failed to update settings',
+        error: (error as Error).message
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

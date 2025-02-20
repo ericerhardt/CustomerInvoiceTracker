@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useEffect } from "react";
 
 const settingsSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
@@ -31,7 +32,13 @@ type SettingsFormData = z.infer<typeof settingsSchema>;
 
 export default function Settings() {
   const { toast } = useToast();
-  
+  const queryClient = useQueryClient();
+
+  const { data: settings } = useQuery({
+    queryKey: ["/api/settings"],
+    queryFn: () => apiRequest("GET", "/api/settings"), // Added query function
+  });
+
   const form = useForm<SettingsFormData>({
     resolver: zodResolver(settingsSchema),
     defaultValues: {
@@ -44,12 +51,19 @@ export default function Settings() {
     },
   });
 
+  useEffect(() => {
+    if (settings) {
+      form.reset(settings);
+    }
+  }, [settings, form]);
+
   const updateSettings = useMutation({
     mutationFn: async (data: SettingsFormData) => {
       const res = await apiRequest("POST", "/api/settings", data);
       return res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
       toast({
         title: "Success",
         description: "Settings updated successfully",
@@ -67,7 +81,7 @@ export default function Settings() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      
+
       <main className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Settings</h1>
 
@@ -78,7 +92,10 @@ export default function Settings() {
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit((data) => updateSettings.mutate(data))} className="space-y-4">
+                <form
+                  onSubmit={form.handleSubmit((data) => updateSettings.mutate(data))}
+                  className="space-y-4"
+                >
                   <FormField
                     control={form.control}
                     name="companyName"
@@ -131,7 +148,7 @@ export default function Settings() {
                           <Input {...field} type="password" />
                         </FormControl>
                         <FormDescription>
-                          Your Stripe secret key (starts with 'sk_')
+                          Your Stripe secret key (starts with "sk_")
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -148,7 +165,7 @@ export default function Settings() {
                           <Input {...field} />
                         </FormControl>
                         <FormDescription>
-                          Your Stripe public key (starts with 'pk_')
+                          Your Stripe public key (starts with "pk_")
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
