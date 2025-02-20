@@ -52,82 +52,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/invoices", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
 
-    const { items, ...invoiceData } = req.body;
-    const invoice = await storage.createInvoice({
-      ...invoiceData,
-      userId: req.user.id,
-    });
-
-    for (const item of items) {
-      await storage.createInvoiceItem({
-        ...item,
-        invoiceId: invoice.id,
+    try {
+      const { items, ...invoiceData } = req.body;
+      const invoice = await storage.createInvoice({
+        ...invoiceData,
+        userId: req.user.id,
       });
-    }
 
-    // Create Stripe payment link
-    const paymentLink = await stripe.paymentLinks.create({
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          product_data: {
-            name: `Invoice ${invoice.number}`,
+      // Create invoice items
+      for (const item of items) {
+        await storage.createInvoiceItem({
+          ...item,
+          invoiceId: invoice.id,
+        });
+      }
+
+      // Create Stripe payment link
+      let paymentLink;
+      try {
+        paymentLink = await stripe.paymentLinks.create({
+          line_items: [{
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: `Invoice ${invoice.number}`,
+              },
+              unit_amount_decimal: (Number(invoice.amount) * 100).toString(),
+            },
+            quantity: 1,
+          }],
+          metadata: {
+            invoiceId: invoice.id.toString(),
           },
-          unit_amount: Math.round(Number(invoice.amount) * 100), 
-          currency: 'usd',
-        },
-      }],
-      metadata: {
-        invoiceId: invoice.id.toString(),
-      },
-    });
+        });
+      } catch (error) {
+        console.error('Stripe payment link creation failed:', error);
+        throw new Error('Failed to create payment link');
+      }
 
-    // Update invoice with Stripe payment details
-    const updatedInvoice = await storage.updateInvoicePayment(
-      invoice.id,
-      paymentLink.id,
-      paymentLink.url
-    );
+      // Update invoice with Stripe payment details
+      const updatedInvoice = await storage.updateInvoicePayment(
+        invoice.id,
+        paymentLink.id,
+        paymentLink.url
+      );
 
-    // Send email to customer
-    const customer = await storage.getCustomer(invoice.customerId);
-    if (customer) {
-      await sendInvoiceEmail({
-        to: customer.email,
-        invoiceNumber: invoice.number,
-        amount: Number(invoice.amount),
-        dueDate: invoice.dueDate,
-        paymentUrl: paymentLink.url,
+      // Send email to customer
+      const customer = await storage.getCustomer(invoice.customerId);
+      if (customer) {
+        await sendInvoiceEmail({
+          to: customer.email,
+          invoiceNumber: invoice.number,
+          amount: Number(invoice.amount),
+          dueDate: invoice.dueDate,
+          paymentUrl: paymentLink.url,
+        });
+      }
+
+      res.status(201).json(updatedInvoice);
+    } catch (error) {
+      console.error('Invoice creation failed:', error);
+      res.status(500).json({
+        message: 'Failed to create invoice',
+        error: (error as Error).message
       });
     }
-
-    res.status(201).json(updatedInvoice);
   });
 
   app.post("/api/webhook/stripe", async (req, res) => {
     const sig = req.headers['stripe-signature'];
-    let event;
+
+    if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+      return res.status(400).send('Webhook signature or secret missing');
+    }
 
     try {
-      event = stripe.webhooks.constructEvent(
+      const event = stripe.webhooks.constructEvent(
         req.body,
-        sig as string,
-        process.env.STRIPE_WEBHOOK_SECRET as string
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
       );
-    } catch (err) {
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
 
-    if (event.type === 'payment_intent.succeeded') {
-      const paymentIntent = event.data.object;
-      const invoiceId = paymentIntent.metadata.invoiceId;
+      if (event.type === 'payment_intent.succeeded') {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        const invoiceId = paymentIntent.metadata?.invoiceId;
 
-      if (invoiceId) {
-        await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+        if (invoiceId) {
+          await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+        }
       }
-    }
 
-    res.json({ received: true });
+      res.json({ received: true });
+    } catch (err) {
+      const error = err as Error;
+      console.error('Webhook Error:', error.message);
+      return res.status(400).send(`Webhook Error: ${error.message}`);
+    }
   });
 
   const httpServer = createServer(app);
