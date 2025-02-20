@@ -33,7 +33,6 @@ const ITEMS_PER_PAGE = 10;
 export default function Dashboard() {
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
 
   const { data: invoices } = useQuery<Invoice[]>({
     queryKey: ["/api/invoices"],
@@ -45,7 +44,12 @@ export default function Dashboard() {
 
   const deletePaymentLink = useMutation({
     mutationFn: async (invoiceId: number) => {
-      await apiRequest("DELETE", `/api/invoices/${invoiceId}/payment-link`);
+      const res = await apiRequest("DELETE", `/api/invoices/${invoiceId}/payment-link`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to delete payment link');
+      }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
@@ -65,7 +69,12 @@ export default function Dashboard() {
 
   const resendPaymentLink = useMutation({
     mutationFn: async (invoiceId: number) => {
-      await apiRequest("POST", `/api/invoices/${invoiceId}/resend`);
+      const res = await apiRequest("POST", `/api/invoices/${invoiceId}/resend`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to resend invoice');
+      }
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
@@ -88,6 +97,14 @@ export default function Dashboard() {
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
+
+  const handleDelete = async (invoiceId: number) => {
+    try {
+      await deletePaymentLink.mutateAsync(invoiceId);
+    } catch (error) {
+      // Error is already handled in the mutation
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -199,7 +216,7 @@ export default function Dashboard() {
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
-                                      onClick={() => deletePaymentLink.mutate(invoice.id)}
+                                      onClick={() => handleDelete(invoice.id)}
                                       className="bg-red-600 hover:bg-red-700"
                                     >
                                       Delete
