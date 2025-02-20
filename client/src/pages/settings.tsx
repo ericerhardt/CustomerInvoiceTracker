@@ -27,7 +27,11 @@ const settingsSchema = z.object({
   companyEmail: z.string().email("Invalid email address"),
   stripeSecretKey: z.string().min(1, "Stripe secret key is required"),
   stripePublicKey: z.string().min(1, "Stripe public key is required"),
-  taxRate: z.coerce.number().min(0, "Tax rate cannot be negative").max(100, "Tax rate cannot exceed 100%"),
+  taxRate: z.coerce
+    .number()
+    .min(0, "Tax rate cannot be negative")
+    .max(100, "Tax rate cannot exceed 100%")
+    .multipleOf(0.01, "Tax rate must have at most 2 decimal places"),
 });
 
 type SettingsFormData = z.infer<typeof settingsSchema>;
@@ -173,13 +177,13 @@ export default function Settings() {
                               type="number" 
                               min="0" 
                               max="100" 
-                              step="0.1" 
+                              step="0.01" 
                               {...field}
                               onChange={(e) => field.onChange(Number(e.target.value))}
                             />
                           </FormControl>
                           <FormDescription>
-                            Enter the tax rate percentage (0-100). This rate will be applied to all invoices.
+                            Enter the tax rate percentage (0-100) with up to 2 decimal places (e.g., 8.25).
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
