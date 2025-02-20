@@ -1,13 +1,4 @@
-import nodemailer from 'nodemailer';
-
-const transporter = nodemailer.createTransport({
-  host: 'smtp.sendgrid.net',
-  port: 587,
-  auth: {
-    user: 'apikey',
-    pass: process.env.SENDGRID_API_KEY,
-  },
-});
+import sgMail from '@sendgrid/mail';
 
 interface SendInvoiceEmailParams {
   to: string;
@@ -34,7 +25,14 @@ export async function sendInvoiceEmail({
   }).format(new Date(dueDate));
 
   try {
-    await transporter.sendMail({
+    // Set the API key for this specific email send
+    if (!process.env.SENDGRID_API_KEY) {
+      throw new Error('SendGrid API key is not configured');
+    }
+
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+    await sgMail.send({
       from: process.env.FROM_EMAIL || 'noreply@example.com',
       to,
       subject: `Invoice ${invoiceNumber} - Payment Required`,
@@ -51,9 +49,13 @@ export async function sendInvoiceEmail({
         </div>
       `,
     });
+
     return true;
   } catch (error) {
     console.error('Failed to send email:', error);
-    return false;
+    if (error instanceof Error) {
+      throw new Error(`Failed to send invoice email: ${error.message}`);
+    }
+    throw new Error('Failed to send invoice email');
   }
 }
