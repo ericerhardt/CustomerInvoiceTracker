@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { sendInvoiceEmail } from "./email";
 import Stripe from "stripe";
 import { renderToBuffer } from '@react-pdf/renderer';
-import { createElement } from 'react';
+import React from 'react';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -121,36 +121,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create Stripe payment link with better error handling
-      let paymentLink;
-      try {
-        // First create a price
-        const price = await stripeInstance.prices.create({
-          currency: 'usd',
-          unit_amount: Math.round(Number(invoice.amount) * 100),
-          product_data: {
-            name: `Invoice ${invoice.number}`,
-          },
-        });
+      // Create Stripe payment link
+      const price = await stripeInstance.prices.create({
+        currency: 'usd',
+        unit_amount: Math.round(Number(invoice.amount) * 100),
+        product_data: {
+          name: `Invoice ${invoice.number}`,
+        },
+      });
 
-        // Then create payment link with the price ID
-        paymentLink = await stripeInstance.paymentLinks.create({
-          line_items: [{
-            price: price.id,
-            quantity: 1,
-          }],
-          metadata: {
-            invoiceId: invoice.id.toString(),
-          },
-        });
-      } catch (error) {
-        console.error('Stripe payment link creation failed:', error);
-        if (error instanceof Stripe.errors.StripeError) {
-          console.error('Stripe Error Type:', error.type);
-          console.error('Stripe Error Message:', error.message);
-        }
-        throw new Error('Failed to create payment link');
-      }
+      const paymentLink = await stripeInstance.paymentLinks.create({
+        line_items: [{
+          price: price.id,
+          quantity: 1,
+        }],
+        metadata: {
+          invoiceId: invoice.id.toString(),
+        },
+      });
 
       // Update invoice with Stripe payment details
       const updatedInvoice = await storage.updateInvoicePayment(
@@ -166,7 +154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         // Generate PDF
-        const pdfDocument = createElement(InvoicePDF as any, {
+        const pdfDocument = React.createElement(InvoicePDF, {
           items: items.map(item => ({
             description: item.description,
             quantity: Number(item.quantity),
@@ -263,7 +251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let pdfBuffer: Buffer | undefined;
       try {
         // Generate PDF using React.createElement
-        const pdfDocument = createElement(InvoicePDF as any, {
+        const pdfDocument = React.createElement(InvoicePDF, {
           items: items.map(item => ({
             description: item.description,
             quantity: Number(item.quantity),
