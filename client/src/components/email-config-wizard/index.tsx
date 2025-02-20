@@ -27,7 +27,7 @@ interface Step {
 
 export function EmailConfigWizard() {
   const [currentStep, setCurrentStep] = useState(0);
-  const { data: settings } = useQuery<Settings>({ 
+  const { data: settings } = useQuery<Settings>({
     queryKey: ["/api/settings"],
   });
 
@@ -89,18 +89,18 @@ export function EmailConfigWizard() {
   const slideVariants = {
     enter: (direction: number) => ({
       x: direction > 0 ? 1000 : -1000,
-      opacity: 0
+      opacity: 0,
     }),
     center: {
       zIndex: 1,
       x: 0,
-      opacity: 1
+      opacity: 1,
     },
     exit: (direction: number) => ({
       zIndex: 0,
       x: direction < 0 ? 1000 : -1000,
-      opacity: 0
-    })
+      opacity: 0,
+    }),
   };
 
   const swipeConfidenceThreshold = 10000;
@@ -160,7 +160,7 @@ export function EmailConfigWizard() {
               exit="exit"
               transition={{
                 x: { type: "spring", stiffness: 300, damping: 30 },
-                opacity: { duration: 0.2 }
+                opacity: { duration: 0.2 },
               }}
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
@@ -193,12 +193,20 @@ export function EmailConfigWizard() {
           >
             <ArrowLeft className="mr-2 h-4 w-4" /> Previous
           </Button>
-          <Button
-            onClick={() => paginate(1)}
-            disabled={currentStep === steps.length - 1}
-          >
-            Next <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+          {currentStep < steps.length - 1 ? (
+            <Button
+              onClick={() => paginate(1)}
+            >
+              Next <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              variant="default"
+              onClick={() => window.location.reload()}
+            >
+              Done
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useEffect } from "react";
@@ -56,7 +57,6 @@ export default function Settings() {
 
   useEffect(() => {
     if (settings) {
-      // Only update non-email related settings
       form.reset({
         companyName: settings.companyName || "",
         companyAddress: settings.companyAddress || "",
@@ -96,108 +96,112 @@ export default function Settings() {
       <main className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Settings</h1>
 
-        <div className="grid gap-6">
-          {/* Email Configuration Wizard */}
-          <section>
-            <h2 className="text-xl font-semibold mb-4">Email Configuration</h2>
+        <Tabs defaultValue="company" className="space-y-6">
+          <TabsList className="grid w-[400px] grid-cols-2">
+            <TabsTrigger value="company">Company Information</TabsTrigger>
+            <TabsTrigger value="email">Email Configuration</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="email">
             <EmailConfigWizard />
-          </section>
+          </TabsContent>
 
-          {/* Company and Payment Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Company Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form
-                  onSubmit={form.handleSubmit((data) => updateSettings.mutate(data))}
-                  className="space-y-4"
-                >
-                  <FormField
-                    control={form.control}
-                    name="companyName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Company Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+          <TabsContent value="company">
+            <Card>
+              <CardHeader>
+                <CardTitle>Company Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Form {...form}>
+                  <form
+                    onSubmit={form.handleSubmit((data) => updateSettings.mutate(data))}
+                    className="space-y-4"
+                  >
+                    <FormField
+                      control={form.control}
+                      name="companyName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Company Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="companyAddress"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Company Address</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="companyAddress"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Company Address</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="companyEmail"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Company Email</FormLabel>
-                        <FormControl>
-                          <Input type="email" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="companyEmail"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Company Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="stripeSecretKey"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Stripe Secret Key</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="password" />
-                        </FormControl>
-                        <FormDescription>
-                          Your Stripe secret key (starts with "sk_")
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="stripeSecretKey"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Stripe Secret Key</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="password" />
+                          </FormControl>
+                          <FormDescription>
+                            Your Stripe secret key (starts with "sk_")
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="stripePublicKey"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Stripe Public Key</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          Your Stripe public key (starts with "pk_")
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="stripePublicKey"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Stripe Public Key</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Your Stripe public key (starts with "pk_")
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <Button type="submit" className="w-full" disabled={updateSettings.isPending}>
-                    {updateSettings.isPending ? "Saving..." : "Save Settings"}
-                  </Button>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        </div>
+                    <Button type="submit" className="w-full" disabled={updateSettings.isPending}>
+                      {updateSettings.isPending ? "Saving..." : "Save Settings"}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
