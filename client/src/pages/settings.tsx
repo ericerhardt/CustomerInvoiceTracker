@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useEffect } from "react";
+import { EmailConfigWizard } from "@/components/email-config-wizard";
 
 const settingsSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
@@ -25,7 +26,6 @@ const settingsSchema = z.object({
   companyEmail: z.string().email("Invalid email address"),
   stripeSecretKey: z.string().min(1, "Stripe secret key is required"),
   stripePublicKey: z.string().min(1, "Stripe public key is required"),
-  sendGridApiKey: z.string().min(1, "SendGrid API key is required"),
 });
 
 type SettingsFormData = z.infer<typeof settingsSchema>;
@@ -51,13 +51,19 @@ export default function Settings() {
       companyEmail: "",
       stripeSecretKey: "",
       stripePublicKey: "",
-      sendGridApiKey: "",
     },
   });
 
   useEffect(() => {
     if (settings) {
-      form.reset(settings);
+      // Only update non-email related settings
+      form.reset({
+        companyName: settings.companyName || "",
+        companyAddress: settings.companyAddress || "",
+        companyEmail: settings.companyEmail || "",
+        stripeSecretKey: settings.stripeSecretKey || "",
+        stripePublicKey: settings.stripePublicKey || "",
+      });
     }
   }, [settings, form]);
 
@@ -91,6 +97,13 @@ export default function Settings() {
         <h1 className="text-3xl font-bold mb-8">Settings</h1>
 
         <div className="grid gap-6">
+          {/* Email Configuration Wizard */}
+          <section>
+            <h2 className="text-xl font-semibold mb-4">Email Configuration</h2>
+            <EmailConfigWizard />
+          </section>
+
+          {/* Company and Payment Settings */}
           <Card>
             <CardHeader>
               <CardTitle>Company Information</CardTitle>
@@ -171,23 +184,6 @@ export default function Settings() {
                         </FormControl>
                         <FormDescription>
                           Your Stripe public key (starts with "pk_")
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="sendGridApiKey"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>SendGrid API Key</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="password" />
-                        </FormControl>
-                        <FormDescription>
-                          Your SendGrid API key for sending emails
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
