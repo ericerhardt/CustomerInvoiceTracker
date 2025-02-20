@@ -23,7 +23,7 @@ export const invoices = pgTable("invoices", {
   number: text("number").notNull(),
   customerId: integer("customer_id").notNull(),
   userId: integer("user_id").notNull(),
-  amount: decimal("amount").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("pending"),
   dueDate: timestamp("due_date").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -36,7 +36,7 @@ export const invoiceItems = pgTable("invoice_items", {
   invoiceId: integer("invoice_id").notNull(),
   description: text("description").notNull(),
   quantity: integer("quantity").notNull(),
-  unitPrice: decimal("unit_price").notNull(),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -52,11 +52,19 @@ export const insertCustomerSchema = createInsertSchema(customers).pick({
   phone: true,
 });
 
-export const insertInvoiceSchema = createInsertSchema(invoices).pick({
-  customerId: true,
-  amount: true,
-  dueDate: true,
-});
+// Updated invoice schema to handle form data
+export const insertInvoiceSchema = createInsertSchema(invoices)
+  .pick({
+    customerId: true,
+    amount: true,
+    dueDate: true,
+  })
+  .extend({
+    // Convert string date to Date object
+    dueDate: z.string().transform((str) => new Date(str)),
+    // Ensure amount is a number
+    amount: z.number().or(z.string().transform(val => Number(val))),
+  });
 
 export const insertInvoiceItemSchema = createInsertSchema(invoiceItems).pick({
   description: true,

@@ -27,7 +27,7 @@ import { useState } from "react";
 
 interface InvoiceFormProps {
   onSuccess?: () => void;
-  invoice?: any; // Added to receive invoice data
+  invoice?: any;
 }
 
 export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
@@ -44,13 +44,20 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
     defaultValues: {
       customerId: 0,
       amount: 0,
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      dueDate: new Date().toISOString().split('T')[0], // Format as YYYY-MM-DD
     },
   });
 
   const createInvoice = useMutation({
     mutationFn: async (data: InsertInvoice) => {
-      const res = await apiRequest("POST", "/api/invoices", { ...data, items });
+      const res = await apiRequest("POST", "/api/invoices", { 
+        ...data,
+        items: items.map(item => ({
+          ...item,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice)
+        }))
+      });
       return res.json();
     },
     onSuccess: () => {
@@ -81,8 +88,11 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
 
     // Update total amount
     const total = newItems.reduce((sum, item) => {
-      return sum + (item.quantity * item.unitPrice);
+      const quantity = Number(item.quantity);
+      const unitPrice = Number(item.unitPrice);
+      return sum + (quantity * unitPrice);
     }, 0);
+
     form.setValue("amount", total);
   };
 
@@ -98,7 +108,7 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
                 <FormLabel>Customer</FormLabel>
                 <Select
                   onValueChange={(value) => field.onChange(parseInt(value))}
-                  defaultValue={field.value.toString()}
+                  value={field.value.toString()}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -125,7 +135,11 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
               <FormItem>
                 <FormLabel>Due Date</FormLabel>
                 <FormControl>
-                  <Input type="date" {...field} />
+                  <Input 
+                    type="date" 
+                    {...field}
+                    value={field.value}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -150,14 +164,17 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
                 <Input
                   type="number"
                   placeholder="Quantity"
+                  min="1"
                   value={item.quantity}
-                  onChange={(e) => updateItem(index, "quantity", parseInt(e.target.value))}
+                  onChange={(e) => updateItem(index, "quantity", e.target.value)}
                 />
                 <Input
                   type="number"
                   placeholder="Unit Price"
+                  min="0"
+                  step="0.01"
                   value={item.unitPrice}
-                  onChange={(e) => updateItem(index, "unitPrice", parseFloat(e.target.value))}
+                  onChange={(e) => updateItem(index, "unitPrice", e.target.value)}
                 />
               </div>
             ))}
@@ -170,7 +187,12 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
               <FormItem>
                 <FormLabel>Total Amount</FormLabel>
                 <FormControl>
-                  <Input type="number" {...field} readOnly />
+                  <Input 
+                    type="number" 
+                    {...field}
+                    value={field.value}
+                    readOnly 
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -187,7 +209,7 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
         items={items}
         customer={customers?.find(c => c.id === form.getValues("customerId"))}
         dueDate={form.getValues("dueDate")}
-        invoiceNumber={invoice?.number} // Added invoiceNumber prop
+        invoiceNumber={invoice?.number}
       />
     </div>
   );
