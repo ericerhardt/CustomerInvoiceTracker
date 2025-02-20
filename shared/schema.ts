@@ -50,9 +50,10 @@ export const insertCustomerSchema = createInsertSchema(customers).pick({
   email: true,
   address: true,
   phone: true,
+}).extend({
+  phone: z.string().nullable(),
 });
 
-// Updated invoice schema to handle form data
 export const insertInvoiceSchema = createInsertSchema(invoices)
   .pick({
     customerId: true,
@@ -61,16 +62,21 @@ export const insertInvoiceSchema = createInsertSchema(invoices)
   })
   .extend({
     // Convert string date to Date object
-    dueDate: z.string().transform((str) => new Date(str)),
+    dueDate: z.coerce.date(),
     // Ensure amount is a number
-    amount: z.number().or(z.string().transform(val => Number(val))),
+    amount: z.coerce.number().positive(),
   });
 
-export const insertInvoiceItemSchema = createInsertSchema(invoiceItems).pick({
-  description: true,
-  quantity: true,
-  unitPrice: true,
-});
+export const insertInvoiceItemSchema = createInsertSchema(invoiceItems)
+  .pick({
+    description: true,
+    quantity: true,
+    unitPrice: true,
+  })
+  .extend({
+    quantity: z.coerce.number().int().positive(),
+    unitPrice: z.coerce.number().positive(),
+  });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;

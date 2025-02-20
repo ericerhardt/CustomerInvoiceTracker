@@ -26,7 +26,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      
+
       <main className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">Dashboard</h1>
@@ -79,7 +79,7 @@ export default function Dashboard() {
                     <TableRow key={invoice.id}>
                       <TableCell>{invoice.number}</TableCell>
                       <TableCell>{customer?.name}</TableCell>
-                      <TableCell>${invoice.amount.toFixed(2)}</TableCell>
+                      <TableCell>${Number(invoice.amount).toFixed(2)}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 rounded-full text-xs ${
                           invoice.status === 'paid' 

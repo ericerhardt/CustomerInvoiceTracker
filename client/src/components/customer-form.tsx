@@ -106,7 +106,7 @@ export function CustomerForm({ onSuccess }: CustomerFormProps) {
             <FormItem>
               <FormLabel>Phone</FormLabel>
               <FormControl>
-                <Input type="tel" {...field} />
+                <Input type="tel" {...field} value={field.value || ''} />
               </FormControl>
               <FormMessage />
             </FormItem>
