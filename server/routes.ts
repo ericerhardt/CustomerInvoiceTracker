@@ -74,10 +74,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           line_items: [{
             price_data: {
               currency: 'usd',
+              unit_amount: Math.round(Number(invoice.amount) * 100),
               product_data: {
                 name: `Invoice ${invoice.number}`,
               },
-              unit_amount_decimal: (Number(invoice.amount) * 100).toString(),
             },
             quantity: 1,
           }],
