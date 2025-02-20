@@ -110,18 +110,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!invoice) return res.sendStatus(404);
       if (invoice.userId !== req.user.id) return res.sendStatus(403);
 
-      // If there's a Stripe payment link, expire it
+      // If there's a Stripe payment link, try to expire it
       if (invoice.stripePaymentId) {
         const stripeInstance = await getStripe(req.user.id);
         try {
-          await stripeInstance.paymentLinks.expire(invoice.stripePaymentId);
+          // Try to get the payment link first to see if it exists
+          const paymentLink = await stripeInstance.paymentLinks.retrieve(invoice.stripePaymentId);
+          if (paymentLink && paymentLink.active) {
+            await stripeInstance.paymentLinks.expire(invoice.stripePaymentId);
+          }
         } catch (stripeError) {
-          console.error('Failed to expire Stripe payment link:', stripeError);
-          // Continue even if expiration fails
+          // Log the error but continue with deletion
+          console.error('Stripe payment link error:', stripeError);
+          // If the payment link doesn't exist or other Stripe error, we still want to delete the invoice
         }
       }
 
-      // Delete the invoice and its items
+      // Delete the invoice and its items from the database
+      // This should happen regardless of the Stripe API call outcome
       await storage.deleteInvoice(invoice.id);
       res.sendStatus(204);
     } catch (error) {
