@@ -8,6 +8,16 @@ import { ApiKeyStep } from "./api-key-step";
 import { SenderEmailStep } from "./sender-email-step";
 import { useQuery } from "@tanstack/react-query";
 
+interface Settings {
+  sendGridApiKey?: string;
+  senderEmail?: string;
+  companyName?: string;
+  companyAddress?: string;
+  companyEmail?: string;
+  stripeSecretKey?: string;
+  stripePublicKey?: string;
+}
+
 interface Step {
   title: string;
   description: string;
@@ -17,7 +27,9 @@ interface Step {
 
 export function EmailConfigWizard() {
   const [currentStep, setCurrentStep] = useState(0);
-  const { data: settings } = useQuery({ queryKey: ["/api/settings"] });
+  const { data: settings } = useQuery<Settings>({ 
+    queryKey: ["/api/settings"],
+  });
 
   const steps: Step[] = [
     {
