@@ -26,7 +26,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     stripe = new Stripe(settings.stripeSecretKey, {
-      apiVersion: '2023-10-16',
+      apiVersion: '2022-11-15',  // Changed to a version that supports payment link operations
     });
 
     return stripe;
@@ -110,25 +110,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!invoice) return res.sendStatus(404);
       if (invoice.userId !== req.user.id) return res.sendStatus(403);
 
-      // If there's a Stripe payment link, try to expire it
+      // If there's a Stripe payment link, try to deactivate it
       if (invoice.stripePaymentId) {
-        const stripeInstance = await getStripe(req.user.id);
         try {
-          // Try to get the payment link first to see if it exists
-          const paymentLink = await stripeInstance.paymentLinks.retrieve(invoice.stripePaymentId);
-          if (paymentLink && paymentLink.active) {
-            await stripeInstance.paymentLinks.expire(invoice.stripePaymentId);
-          }
+          const stripeInstance = await getStripe(req.user.id);
+          await stripeInstance.paymentLinks.update(invoice.stripePaymentId, {
+            active: false
+          });
         } catch (stripeError) {
           // Log the error but continue with deletion
-          console.error('Stripe payment link error:', stripeError);
-          // If the payment link doesn't exist or other Stripe error, we still want to delete the invoice
+          console.error('Failed to deactivate Stripe payment link:', stripeError);
         }
       }
 
       // Delete the invoice and its items from the database
-      // This should happen regardless of the Stripe API call outcome
       await storage.deleteInvoice(invoice.id);
+
+      // Return success status
       res.sendStatus(204);
     } catch (error) {
       console.error('Failed to delete invoice:', error);
@@ -355,7 +353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Expire the payment link in Stripe if it exists
       if (invoice.stripePaymentId) {
         try {
-          await stripeInstance.paymentLinks.expire(invoice.stripePaymentId);
+          await stripeInstance.paymentLinks.update(invoice.stripePaymentId, { active: false });
         } catch (stripeError) {
           console.error('Failed to expire Stripe payment link:', stripeError);
           // Continue even if expiration fails
@@ -388,7 +386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const stripeInstance = stripe || new Stripe(process.env.STRIPE_SECRET_KEY!, {
-        apiVersion: '2023-10-16',
+        apiVersion: '2022-11-15',
       });
 
       const event = stripeInstance.webhooks.constructEvent(
