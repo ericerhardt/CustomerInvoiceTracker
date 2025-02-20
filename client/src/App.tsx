@@ -13,10 +13,10 @@ import { ProtectedRoute } from "./lib/protected-route";
 function Router() {
   return (
     <Switch>
-      <ProtectedRoute path="/" component={Dashboard} />
-      <ProtectedRoute path="/create-invoice" component={CreateInvoice} />
-      <ProtectedRoute path="/invoice/:id" component={CreateInvoice} />
-      <ProtectedRoute path="/settings" component={Settings} />
+      <Route path="/" component={() => <ProtectedRoute path="/" component={Dashboard} />} />
+      <Route path="/create-invoice" component={() => <ProtectedRoute path="/create-invoice" component={CreateInvoice} />} />
+      <Route path="/invoice/:id" component={() => <ProtectedRoute path="/invoice/:id" component={CreateInvoice} />} />
+      <Route path="/settings" component={() => <ProtectedRoute path="/settings" component={Settings} />} />
       <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>

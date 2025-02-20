@@ -14,14 +14,16 @@ export default function CreateInvoice() {
   const { id } = useParams();
 
   const { data: invoice, isLoading } = useQuery({
-    queryKey: ["/api/invoices", id],
+    queryKey: [`/api/invoices/${id}`],
     queryFn: async () => {
       if (!id) return null;
       const res = await apiRequest("GET", `/api/invoices/${id}`);
       if (!res.ok) {
-        throw new Error('Failed to fetch invoice');
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to fetch invoice');
       }
-      return res.json();
+      const data = await res.json();
+      return data;
     },
     enabled: !!id,
   });
