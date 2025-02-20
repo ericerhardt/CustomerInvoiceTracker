@@ -25,14 +25,17 @@ export async function sendInvoiceEmail({
   }).format(new Date(dueDate));
 
   try {
-    // Set the API key for this specific email send
     if (!process.env.SENDGRID_API_KEY) {
       throw new Error('SendGrid API key is not configured');
     }
 
+    if (!process.env.SENDGRID_API_KEY.startsWith('SG.')) {
+      throw new Error('Invalid SendGrid API key format. Must start with "SG."');
+    }
+
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-    await sgMail.send({
+    const msg = {
       from: process.env.FROM_EMAIL || 'noreply@example.com',
       to,
       subject: `Invoice ${invoiceNumber} - Payment Required`,
@@ -48,8 +51,10 @@ export async function sendInvoiceEmail({
           </p>
         </div>
       `,
-    });
+    };
 
+    await sgMail.send(msg);
+    console.log(`Email sent successfully to ${to} for invoice ${invoiceNumber}`);
     return true;
   } catch (error) {
     console.error('Failed to send email:', error);

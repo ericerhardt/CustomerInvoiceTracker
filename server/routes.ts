@@ -4,6 +4,8 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { sendInvoiceEmail } from "./email";
 import Stripe from "stripe";
+import sgMail from '@sendgrid/mail'; // Added import for SendGrid
+
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -315,7 +317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Settings endpoints remain unchanged
+  // Settings endpoints
   app.get("/api/settings", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
 
@@ -335,10 +337,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) return res.sendStatus(401);
 
     try {
+      // Validate SendGrid API key format
+      if (req.body.sendGridApiKey && !req.body.sendGridApiKey.startsWith('SG.')) {
+        throw new Error('Invalid SendGrid API key format. Must start with "SG."');
+      }
+
       const settings = await storage.upsertSettings({
         ...req.body,
         userId: req.user.id,
       });
+
+      // Test SendGrid configuration if API key is provided
+      if (settings.sendGridApiKey) {
+        sgMail.setApiKey(settings.sendGridApiKey);
+        try {
+          await sgMail.send({
+            to: settings.companyEmail,
+            from: process.env.FROM_EMAIL || settings.companyEmail,
+            subject: 'SendGrid Configuration Test',
+            text: 'This is a test email to verify your SendGrid configuration.',
+          });
+        } catch (emailError) {
+          throw new Error(`SendGrid configuration test failed: ${(emailError as Error).message}`);
+        }
+      }
+
       res.json(settings);
     } catch (error) {
       console.error('Failed to update settings:', error);
