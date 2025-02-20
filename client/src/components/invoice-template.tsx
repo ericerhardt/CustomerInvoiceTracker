@@ -1,5 +1,9 @@
 import { Customer } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import { InvoicePDF } from "./InvoicePDF";
 import {
   Table,
   TableBody,
@@ -17,9 +21,10 @@ interface InvoiceTemplateProps {
   }>;
   customer?: Customer;
   dueDate: string;
+  invoiceNumber?: string;
 }
 
-export function InvoiceTemplate({ items, customer, dueDate }: InvoiceTemplateProps) {
+export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRAFT" }: InvoiceTemplateProps) {
   const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const tax = subtotal * 0.1; // 10% tax
   const total = subtotal + tax;
@@ -27,22 +32,43 @@ export function InvoiceTemplate({ items, customer, dueDate }: InvoiceTemplatePro
   return (
     <Card className="bg-white">
       <CardHeader className="border-b">
-        <div className="flex justify-between">
+        <div className="flex justify-between items-center">
           <div>
             <CardTitle className="text-2xl font-bold text-primary mb-2">
               INVOICE
             </CardTitle>
             <p className="text-sm text-muted-foreground">
+              Invoice Number: {invoiceNumber}<br />
               Due Date: {new Date(dueDate).toLocaleDateString()}
             </p>
           </div>
-          <div className="text-right">
-            <h3 className="font-semibold">Your Company Name</h3>
-            <p className="text-sm text-muted-foreground">
-              123 Business Street<br />
-              City, State 12345<br />
-              contact@company.com
-            </p>
+          <div className="space-y-4">
+            <div className="text-right">
+              <h3 className="font-semibold">Your Company Name</h3>
+              <p className="text-sm text-muted-foreground">
+                123 Business Street<br />
+                City, State 12345<br />
+                contact@company.com
+              </p>
+            </div>
+            <PDFDownloadLink
+              document={
+                <InvoicePDF
+                  items={items}
+                  customer={customer}
+                  dueDate={dueDate}
+                  invoiceNumber={invoiceNumber}
+                />
+              }
+              fileName={`invoice-${invoiceNumber}.pdf`}
+            >
+              {({ loading }) => (
+                <Button disabled={loading} className="w-full">
+                  <Download className="mr-2 h-4 w-4" />
+                  {loading ? "Generating PDF..." : "Download PDF"}
+                </Button>
+              )}
+            </PDFDownloadLink>
           </div>
         </div>
       </CardHeader>

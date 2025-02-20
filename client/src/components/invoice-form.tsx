@@ -27,9 +27,10 @@ import { useState } from "react";
 
 interface InvoiceFormProps {
   onSuccess?: () => void;
+  invoice?: any; // Added to receive invoice data
 }
 
-export function InvoiceForm({ onSuccess }: InvoiceFormProps) {
+export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [items, setItems] = useState([{ description: "", quantity: 1, unitPrice: 0 }]);
@@ -77,7 +78,7 @@ export function InvoiceForm({ onSuccess }: InvoiceFormProps) {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     setItems(newItems);
-    
+
     // Update total amount
     const total = newItems.reduce((sum, item) => {
       return sum + (item.quantity * item.unitPrice);
@@ -186,6 +187,7 @@ export function InvoiceForm({ onSuccess }: InvoiceFormProps) {
         items={items}
         customer={customers?.find(c => c.id === form.getValues("customerId"))}
         dueDate={form.getValues("dueDate")}
+        invoiceNumber={invoice?.number} // Added invoiceNumber prop
       />
     </div>
   );
