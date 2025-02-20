@@ -102,6 +102,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/invoices/:id", async (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+
+    try {
+      const invoice = await storage.getInvoice(parseInt(req.params.id));
+      if (!invoice) return res.sendStatus(404);
+      if (invoice.userId !== req.user.id) return res.sendStatus(403);
+
+      // If there's a Stripe payment link, cancel it
+      if (invoice.stripePaymentId) {
+        const stripeInstance = await getStripe(req.user.id);
+        try {
+          await stripeInstance.paymentLinks.cancel(invoice.stripePaymentId);
+        } catch (stripeError) {
+          console.error('Failed to cancel Stripe payment link:', stripeError);
+          // Continue even if cancellation fails
+        }
+      }
+
+      // Delete the invoice and its items
+      await storage.deleteInvoice(invoice.id);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error('Failed to delete invoice:', error);
+      res.status(500).json({
+        message: 'Failed to delete invoice',
+        error: (error as Error).message
+      });
+    }
+  });
+
   app.post("/api/invoices", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
 

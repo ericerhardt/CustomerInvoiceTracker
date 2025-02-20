@@ -27,6 +27,7 @@ export interface IStorage {
   updateInvoiceStatus(id: number, status: string): Promise<Invoice>;
   updateInvoicePayment(id: number, paymentId: string, paymentUrl: string): Promise<Invoice>;
   updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice>;
+  deleteInvoice(id: number): Promise<void>; // Add this new method
 
   // Invoice items
   createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem>;
@@ -136,6 +137,13 @@ export class DatabaseStorage implements IStorage {
       .where(eq(invoices.id, id))
       .returning();
     return updatedInvoice;
+  }
+
+  async deleteInvoice(id: number): Promise<void> {
+    // First delete all invoice items
+    await this.deleteInvoiceItems(id);
+    // Then delete the invoice
+    await db.delete(invoices).where(eq(invoices.id, id));
   }
 
   async createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> {
