@@ -159,23 +159,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentLink.url
       );
 
-      // Send email to customer using settings
+      // Get customer and settings for PDF generation
       const customer = await storage.getCustomer(invoice.customerId);
-      if (customer) {
-        const settings = await storage.getSettingsByUserId(req.user.id);
-        if (settings?.sendGridApiKey) {
-          if (!settings.sendGridApiKey.startsWith('SG.')) {
-            throw new Error('Invalid SendGrid API key format');
-          }
-          process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
-          await sendInvoiceEmail({
-            to: customer.email,
-            invoiceNumber: invoice.number,
-            amount: Number(invoice.amount),
-            dueDate: invoice.dueDate,
-            paymentUrl: paymentLink.url,
-          });
+      const settings = await storage.getSettingsByUserId(req.user.id);
+      let pdfBuffer: Buffer | undefined;
+
+      try {
+        // Generate PDF
+        const pdfDocument = createElement(InvoicePDF as any, {
+          items: items.map(item => ({
+            description: item.description,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unitPrice)
+          })),
+          customer,
+          dueDate: invoice.dueDate.toISOString(),
+          invoiceNumber: invoice.number,
+          settings: settings ? {
+            companyName: settings.companyName || '',
+            companyAddress: settings.companyAddress || '',
+            companyEmail: settings.companyEmail || '',
+          } : undefined
+        });
+
+        console.log('Generating PDF buffer for new invoice...');
+        pdfBuffer = await renderToBuffer(pdfDocument);
+        console.log('PDF buffer generated successfully for new invoice');
+      } catch (pdfError) {
+        console.error('Failed to generate PDF:', pdfError);
+        // Continue without PDF if generation fails
+      }
+
+      // Send email to customer using settings
+      if (customer && settings?.sendGridApiKey) {
+        if (!settings.sendGridApiKey.startsWith('SG.')) {
+          throw new Error('Invalid SendGrid API key format');
         }
+        process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
+        await sendInvoiceEmail({
+          to: customer.email,
+          invoiceNumber: invoice.number,
+          amount: Number(invoice.amount),
+          dueDate: invoice.dueDate,
+          paymentUrl: paymentLink.url,
+          pdfBuffer,
+        });
       }
 
       res.status(201).json(updatedInvoice);
@@ -232,9 +260,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentLink.url
       );
 
+      let pdfBuffer: Buffer | undefined;
       try {
         // Generate PDF using React.createElement
-        const pdfDocument = createElement(InvoicePDF, {
+        const pdfDocument = createElement(InvoicePDF as any, {
           items: items.map(item => ({
             description: item.description,
             quantity: Number(item.quantity),
@@ -251,46 +280,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         console.log('Generating PDF buffer...');
-        const pdfBuffer = await renderToBuffer(pdfDocument);
+        pdfBuffer = await renderToBuffer(pdfDocument);
         console.log('PDF buffer generated successfully');
-
-        // Send email with PDF attachment
-        if (settings?.sendGridApiKey) {
-          if (!settings.sendGridApiKey.startsWith('SG.')) {
-            throw new Error('Invalid SendGrid API key format. Must start with "SG."');
-          }
-
-          console.log('Sending email with PDF attachment...');
-          process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
-          await sendInvoiceEmail({
-            to: customer.email,
-            invoiceNumber: invoice.number,
-            amount: Number(invoice.amount),
-            dueDate: invoice.dueDate,
-            paymentUrl: paymentLink.url,
-            pdfBuffer,
-          });
-          console.log('Email sent successfully');
-        }
       } catch (pdfError) {
-        console.error('Failed to generate or send PDF:', pdfError);
+        console.error('Failed to generate PDF:', pdfError);
         // Continue without PDF if generation fails
-        if (settings?.sendGridApiKey) {
-          if (!settings.sendGridApiKey.startsWith('SG.')) {
-            throw new Error('Invalid SendGrid API key format. Must start with "SG."');
-          }
+      }
 
-          console.log('Sending email without PDF...');
-          process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
-          await sendInvoiceEmail({
-            to: customer.email,
-            invoiceNumber: invoice.number,
-            amount: Number(invoice.amount),
-            dueDate: invoice.dueDate,
-            paymentUrl: paymentLink.url,
-          });
-          console.log('Email sent successfully without PDF');
+      // Send email with PDF attachment
+      if (settings?.sendGridApiKey) {
+        if (!settings.sendGridApiKey.startsWith('SG.')) {
+          throw new Error('Invalid SendGrid API key format. Must start with "SG."');
         }
+
+        console.log('Sending email with PDF attachment...');
+        process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
+        await sendInvoiceEmail({
+          to: customer.email,
+          invoiceNumber: invoice.number,
+          amount: Number(invoice.amount),
+          dueDate: invoice.dueDate,
+          paymentUrl: paymentLink.url,
+          pdfBuffer,
+        });
+        console.log('Email sent successfully');
       }
 
       res.json(updatedInvoice);

@@ -23,7 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { PlusCircle, Trash2, Send } from "lucide-react";
+import { PlusCircle, Trash2, Send, Loader2 } from "lucide-react";
 import { Invoice, Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -34,7 +34,7 @@ export default function Dashboard() {
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { data: invoices } = useQuery<Invoice[]>({
+  const { data: invoices, isLoading: isLoadingInvoices } = useQuery<Invoice[]>({
     queryKey: ["/api/invoices"],
   });
 
@@ -76,14 +76,34 @@ export default function Dashboard() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: async (invoiceId) => {
+      // Optimistic update
+      const previousInvoices = queryClient.getQueryData<Invoice[]>(["/api/invoices"]);
+
+      if (previousInvoices) {
+        queryClient.setQueryData<Invoice[]>(["/api/invoices"], (old) =>
+          old?.map((invoice) =>
+            invoice.id === invoiceId
+              ? { ...invoice, isResending: true }
+              : invoice
+          )
+        );
+      }
+
+      return { previousInvoices };
+    },
+    onSuccess: (_, invoiceId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       toast({
         title: "Success",
         description: "Invoice and payment link sent successfully",
       });
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _, context) => {
+      // Revert optimistic update on error
+      if (context?.previousInvoices) {
+        queryClient.setQueryData(["/api/invoices"], context.previousInvoices);
+      }
       toast({
         title: "Error",
         description: error.message,
@@ -105,6 +125,19 @@ export default function Dashboard() {
       // Error is already handled in the mutation
     }
   };
+
+  if (isLoadingInvoices) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -158,7 +191,8 @@ export default function Dashboard() {
               </TableHeader>
               <TableBody>
                 {paginatedInvoices?.map((invoice) => {
-                  const customer = customers?.find(c => c.id === invoice.customerId);
+                  const customer = customers?.find((c) => c.id === invoice.customerId);
+                  const isResending = invoice.isResending;
                   return (
                     <TableRow key={invoice.id}>
                       <TableCell>
@@ -171,11 +205,13 @@ export default function Dashboard() {
                       <TableCell>{customer?.name}</TableCell>
                       <TableCell>${Number(invoice.amount).toFixed(2)}</TableCell>
                       <TableCell>
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          invoice.status === 'paid'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs ${
+                            invoice.status === "paid"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
                           {invoice.status}
                         </span>
                       </TableCell>
@@ -184,16 +220,20 @@ export default function Dashboard() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          {invoice.status !== 'paid' && (
+                          {invoice.status !== "paid" && (
                             <>
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => resendPaymentLink.mutate(invoice.id)}
-                                disabled={resendPaymentLink.isPending}
+                                disabled={isResending || resendPaymentLink.isPending}
                               >
-                                <Send className="h-4 w-4 mr-1" />
-                                Resend
+                                {isResending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                ) : (
+                                  <Send className="h-4 w-4 mr-1" />
+                                )}
+                                {isResending ? "Sending..." : "Resend"}
                               </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -201,6 +241,7 @@ export default function Dashboard() {
                                     variant="outline"
                                     size="sm"
                                     className="text-red-600 hover:text-red-700"
+                                    disabled={isResending}
                                   >
                                     <Trash2 className="h-4 w-4 mr-1" />
                                     Delete
@@ -239,7 +280,7 @@ export default function Dashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                 >
                   Previous
@@ -250,7 +291,7 @@ export default function Dashboard() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
                 >
                   Next
