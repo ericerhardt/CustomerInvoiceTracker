@@ -98,15 +98,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         paymentLink = await stripe.paymentLinks.create({
           line_items: [{
+            quantity: 1,
             price_data: {
               currency: 'usd',
               unit_amount: Math.round(Number(invoice.amount) * 100),
               product_data: {
                 name: `Invoice ${invoice.number}`,
-                description: 'Payment for invoice',
               },
             },
-            quantity: 1,
           }],
           metadata: {
             invoiceId: invoice.id.toString(),
