@@ -1,8 +1,12 @@
-import { User, Customer, Invoice, InvoiceItem, InsertUser, InsertCustomer, InsertInvoice, InsertInvoiceItem } from "@shared/schema";
+import { users, customers, invoices, invoiceItems } from "@shared/schema";
+import type { User, Customer, Invoice, InvoiceItem, InsertUser, InsertCustomer, InsertInvoice, InsertInvoiceItem } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   // User operations
@@ -29,117 +33,99 @@ export interface IStorage {
   sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private customers: Map<number, Customer>;
-  private invoices: Map<number, Invoice>;
-  private invoiceItems: Map<number, InvoiceItem>;
-  private currentId: { [key: string]: number };
+export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.customers = new Map();
-    this.invoices = new Map();
-    this.invoiceItems = new Map();
-    this.currentId = { users: 1, customers: 1, invoices: 1, invoiceItems: 1 };
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
+    this.sessionStore = new PostgresSessionStore({ 
+      pool,
+      createTableIfMissing: true
     });
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId.users++;
-    const user = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async getCustomersByUserId(userId: number): Promise<Customer[]> {
-    return Array.from(this.customers.values()).filter(
-      (customer) => customer.userId === userId,
-    );
+    return await db.select().from(customers).where(eq(customers.userId, userId));
   }
 
   async createCustomer(customer: InsertCustomer & { userId: number }): Promise<Customer> {
-    const id = this.currentId.customers++;
-    const newCustomer = { ...customer, id };
-    this.customers.set(id, newCustomer);
+    const [newCustomer] = await db.insert(customers).values(customer).returning();
     return newCustomer;
   }
 
   async getCustomer(id: number): Promise<Customer | undefined> {
-    return this.customers.get(id);
+    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
+    return customer;
   }
 
   async createInvoice(invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
-    const id = this.currentId.invoices++;
-    const number = `INV-${String(id).padStart(6, '0')}`;
-    const newInvoice = { 
-      ...invoice, 
-      id, 
-      number,
-      status: 'pending',
-      createdAt: new Date(),
-      stripePaymentId: null,
-      stripePaymentUrl: null
-    };
-    this.invoices.set(id, newInvoice);
+    const number = `INV-${Date.now()}`;
+    const [newInvoice] = await db
+      .insert(invoices)
+      .values({
+        ...invoice,
+        number,
+        status: 'pending',
+        createdAt: new Date(),
+        stripePaymentId: null,
+        stripePaymentUrl: null,
+      })
+      .returning();
     return newInvoice;
   }
 
   async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
-    return Array.from(this.invoices.values()).filter(
-      (invoice) => invoice.userId === userId,
-    );
+    return await db.select().from(invoices).where(eq(invoices.userId, userId));
   }
 
   async getInvoice(id: number): Promise<Invoice | undefined> {
-    return this.invoices.get(id);
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
+    return invoice;
   }
 
   async updateInvoiceStatus(id: number, status: string): Promise<Invoice> {
-    const invoice = await this.getInvoice(id);
-    if (!invoice) throw new Error('Invoice not found');
-    const updatedInvoice = { ...invoice, status };
-    this.invoices.set(id, updatedInvoice);
-    return updatedInvoice;
+    const [invoice] = await db
+      .update(invoices)
+      .set({ status })
+      .where(eq(invoices.id, id))
+      .returning();
+    return invoice;
   }
 
   async updateInvoicePayment(id: number, paymentId: string, paymentUrl: string): Promise<Invoice> {
-    const invoice = await this.getInvoice(id);
-    if (!invoice) throw new Error('Invoice not found');
-    const updatedInvoice = { 
-      ...invoice, 
-      stripePaymentId: paymentId,
-      stripePaymentUrl: paymentUrl
-    };
-    this.invoices.set(id, updatedInvoice);
-    return updatedInvoice;
+    const [invoice] = await db
+      .update(invoices)
+      .set({ 
+        stripePaymentId: paymentId,
+        stripePaymentUrl: paymentUrl
+      })
+      .where(eq(invoices.id, id))
+      .returning();
+    return invoice;
   }
 
   async createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> {
-    const id = this.currentId.invoiceItems++;
-    const newItem = { ...item, id };
-    this.invoiceItems.set(id, newItem);
+    const [newItem] = await db.insert(invoiceItems).values(item).returning();
     return newItem;
   }
 
   async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
-    return Array.from(this.invoiceItems.values()).filter(
-      (item) => item.invoiceId === invoiceId,
-    );
+    return await db.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
