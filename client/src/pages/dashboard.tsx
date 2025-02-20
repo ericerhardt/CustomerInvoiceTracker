@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,16 +11,59 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Trash2, Send } from "lucide-react";
 import { Invoice, Customer } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
+  const { toast } = useToast();
   const { data: invoices } = useQuery<Invoice[]>({
     queryKey: ["/api/invoices"],
   });
 
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
+  });
+
+  const deletePaymentLink = useMutation({
+    mutationFn: async (invoiceId: number) => {
+      await apiRequest("DELETE", `/api/invoices/${invoiceId}/payment-link`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      toast({
+        title: "Success",
+        description: "Payment link deleted successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resendPaymentLink = useMutation({
+    mutationFn: async (invoiceId: number) => {
+      await apiRequest("POST", `/api/invoices/${invoiceId}/resend`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      toast({
+        title: "Success",
+        description: "Payment link resent successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   return (
@@ -70,6 +113,7 @@ export default function Dashboard() {
                   <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Due Date</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -91,6 +135,33 @@ export default function Dashboard() {
                       </TableCell>
                       <TableCell>
                         {new Date(invoice.dueDate).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {invoice.status !== 'paid' && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => resendPaymentLink.mutate(invoice.id)}
+                                disabled={resendPaymentLink.isPending}
+                              >
+                                <Send className="h-4 w-4 mr-1" />
+                                Resend
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => deletePaymentLink.mutate(invoice.id)}
+                                disabled={deletePaymentLink.isPending}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Delete Link
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

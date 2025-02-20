@@ -153,6 +153,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/invoices/:id/resend", async (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+
+    try {
+      const invoice = await storage.getInvoice(parseInt(req.params.id));
+      if (!invoice) return res.sendStatus(404);
+      if (invoice.userId !== req.user.id) return res.sendStatus(403);
+
+      // Create new Stripe payment link
+      const price = await stripe.prices.create({
+        currency: 'usd',
+        unit_amount: Math.round(Number(invoice.amount) * 100),
+        product_data: {
+          name: `Invoice ${invoice.number}`,
+        },
+      });
+
+      const paymentLink = await stripe.paymentLinks.create({
+        line_items: [{
+          price: price.id,
+          quantity: 1,
+        }],
+        metadata: {
+          invoiceId: invoice.id.toString(),
+        },
+      });
+
+      // Update invoice with new payment link
+      const updatedInvoice = await storage.updateInvoicePayment(
+        invoice.id,
+        paymentLink.id,
+        paymentLink.url
+      );
+
+      // Resend email to customer
+      const customer = await storage.getCustomer(invoice.customerId);
+      if (customer) {
+        await sendInvoiceEmail({
+          to: customer.email,
+          invoiceNumber: invoice.number,
+          amount: Number(invoice.amount),
+          dueDate: invoice.dueDate,
+          paymentUrl: paymentLink.url,
+        });
+      }
+
+      res.json(updatedInvoice);
+    } catch (error) {
+      console.error('Failed to resend invoice:', error);
+      res.status(500).json({
+        message: 'Failed to resend invoice',
+        error: (error as Error).message
+      });
+    }
+  });
+
+  app.delete("/api/invoices/:id/payment-link", async (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+
+    try {
+      const invoice = await storage.getInvoice(parseInt(req.params.id));
+      if (!invoice) return res.sendStatus(404);
+      if (invoice.userId !== req.user.id) return res.sendStatus(403);
+
+      // Delete the payment link in Stripe if it exists
+      if (invoice.stripePaymentId) {
+        await stripe.paymentLinks.del(invoice.stripePaymentId);
+      }
+
+      // Update invoice to remove payment link
+      const updatedInvoice = await storage.updateInvoicePayment(
+        invoice.id,
+        null,
+        null
+      );
+
+      res.json(updatedInvoice);
+    } catch (error) {
+      console.error('Failed to delete payment link:', error);
+      res.status(500).json({
+        message: 'Failed to delete payment link',
+        error: (error as Error).message
+      });
+    }
+  });
+
   app.post("/api/webhook/stripe", async (req, res) => {
     const sig = req.headers['stripe-signature'];
 
