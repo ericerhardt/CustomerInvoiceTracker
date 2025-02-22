@@ -282,12 +282,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error('Customer not found');
       }
 
+      // Deactivate old payment link if it exists
+      if (invoice.stripePaymentId) {
+        try {
+          await stripeInstance.paymentLinks.update(invoice.stripePaymentId, {
+            active: false
+          });
+        } catch (stripeError) {
+          console.error('Failed to deactivate old payment link:', stripeError);
+          // Continue with creating new link even if deactivation fails
+        }
+      }
+
       // Create new Stripe payment link
       const price = await stripeInstance.prices.create({
         currency: 'usd',
         unit_amount: Math.round(Number(invoice.amount) * 100),
         product_data: {
           name: `Invoice ${invoice.number}`,
+          metadata: {
+            invoiceId: invoice.id.toString(),
+          },
         },
       });
 
@@ -299,6 +314,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           invoiceId: invoice.id.toString(),
         },
+        after_completion: { 
+          type: 'redirect',
+          redirect: { url: `${process.env.PUBLIC_URL || ''}/invoices/${invoice.id}` }
+        }
       });
 
       // Update invoice with new payment link
