@@ -96,6 +96,7 @@ export const settings = pgTable("settings", {
   stripePublicKey: text("stripe_public_key").notNull(),
   sendGridApiKey: text("sendgrid_api_key").notNull(),
   sendGridFromEmail: text("sendgrid_from_email").notNull(),
+  resetLinkUrl: text("reset_link_url").notNull().default("http://localhost:5000/reset-password"),
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default('10'),
 });
 
@@ -108,10 +109,12 @@ export const insertSettingsSchema = createInsertSchema(settings)
     stripePublicKey: true,
     sendGridApiKey: true,
     sendGridFromEmail: true,
+    resetLinkUrl: true,
     taxRate: true,
   })
   .extend({
     taxRate: z.coerce.number().min(0).max(100),
+    resetLinkUrl: z.string().url("Must be a valid URL"),
   });
 
 export type InsertSettings = z.infer<typeof insertSettingsSchema>;

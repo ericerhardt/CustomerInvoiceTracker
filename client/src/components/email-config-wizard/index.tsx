@@ -2,11 +2,12 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Mail, Key, CheckCircle, ArrowRight, ArrowLeft } from "lucide-react";
+import { Mail, Key, CheckCircle, ArrowRight, ArrowLeft, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiKeyStep } from "./api-key-step";
 import { SenderEmailStep } from "./sender-email-step";
 import { useQuery } from "@tanstack/react-query";
+import { ResetUrlStep } from "./reset-url-step";
 
 interface Settings {
   sendGridApiKey?: string;
@@ -16,6 +17,7 @@ interface Settings {
   companyEmail?: string;
   stripeSecretKey?: string;
   stripePublicKey?: string;
+  resetLinkUrl?: string; // Added for ResetUrlStep
 }
 
 interface Step {
@@ -55,6 +57,17 @@ export function EmailConfigWizard() {
       ),
     },
     {
+      title: "Reset Link URL",
+      description: "Configure the password reset link URL",
+      icon: <Link className="w-6 h-6" />,
+      component: (
+        <ResetUrlStep
+          onComplete={() => paginate(1)}
+          defaultValue={settings?.resetLinkUrl}
+        />
+      ),
+    },
+    {
       title: "Configuration Complete",
       description: "Your email settings are now configured",
       icon: <CheckCircle className="w-6 h-6" />,
@@ -77,6 +90,7 @@ export function EmailConfigWizard() {
               <li>Send invoices to customers via email</li>
               <li>Include PDF attachments automatically</li>
               <li>Track email delivery status</li>
+              <li>Send password reset emails with custom URLs</li>
             </ul>
           </div>
         </div>

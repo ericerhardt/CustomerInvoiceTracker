@@ -185,6 +185,8 @@ export class DatabaseStorage implements IStorage {
         // Ensure SendGrid fields are properly handled
         sendGridApiKey: settingsData.sendGridApiKey || existing.sendGridApiKey,
         sendGridFromEmail: settingsData.sendGridFromEmail || existing.sendGridFromEmail,
+        // Handle resetLinkUrl
+        resetLinkUrl: settingsData.resetLinkUrl || existing.resetLinkUrl,
       };
 
       const [updated] = await db
@@ -197,6 +199,9 @@ export class DatabaseStorage implements IStorage {
       // For new settings, ensure all required fields are present
       if (settingsData.taxRate === undefined) {
         settingsData.taxRate = 10; // Default tax rate
+      }
+      if (!settingsData.resetLinkUrl) {
+        settingsData.resetLinkUrl = "http://localhost:5000/reset-password"; // Default reset URL
       }
 
       const [created] = await db

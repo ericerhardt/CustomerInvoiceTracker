@@ -105,7 +105,10 @@ export function setupAuth(app: Express) {
       if (user) {
         console.log('User found, generating reset token...');
         const resetToken = randomBytes(32).toString('hex');
-        const resetUrl = `${process.env.APP_URL || 'http://localhost:5000'}/reset-password`;
+
+        // Get settings to use custom reset URL
+        const settings = await storage.getSettingsByUserId(user.id);
+        const baseResetUrl = settings?.resetLinkUrl || `${process.env.APP_URL || 'http://localhost:5000'}/reset-password`;
 
         // Store reset token with user ID
         console.log('Storing reset token in session store...');
@@ -126,7 +129,7 @@ export function setupAuth(app: Express) {
           await sendPasswordResetEmail({
             to: email,
             resetToken,
-            resetUrl,
+            resetUrl: baseResetUrl,
             userId: user.id
           });
           console.log('Password reset email sent successfully');
