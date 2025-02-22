@@ -1,4 +1,8 @@
-import { users, customers, invoices, invoiceItems, settings } from "@shared/schema";
+.set({
+  ...invoice,
+  dueDate: new Date(invoice.dueDate),
+  amount: String(invoice.amount) // Convert amount to string
+})import { users, customers, invoices, invoiceItems, settings } from "@shared/schema";
 import type { User, Customer, Invoice, InvoiceItem, InsertUser, InsertCustomer, InsertInvoice, InsertInvoiceItem } from "@shared/schema";
 import type { Settings, InsertSettings } from "@shared/schema";
 import { db } from "./db";
