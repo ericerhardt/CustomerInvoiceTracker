@@ -17,7 +17,7 @@ function Router() {
     <Switch>
       <Route path="/" component={() => <ProtectedRoute path="/" component={Dashboard} />} />
       <Route path="/create-invoice" component={() => <ProtectedRoute path="/create-invoice" component={CreateInvoice} />} />
-      <Route path="/invoice/:id" component={() => <ProtectedRoute path="/invoice/:id" component={CreateInvoice} />} />
+      <Route path="/create-invoice/:id" component={() => <ProtectedRoute path="/create-invoice/:id" component={CreateInvoice} />} />
       <Route path="/settings" component={() => <ProtectedRoute path="/settings" component={Settings} />} />
       <Route path="/customers" component={() => <ProtectedRoute path="/customers" component={Customers} />} />
       <Route path="/invoices" component={() => <ProtectedRoute path="/invoices" component={Invoices} />} />
