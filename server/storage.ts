@@ -145,14 +145,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInvoice(invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
+    // Generate invoice number
+    const invoiceNumber = `INV-${Date.now()}`;
+
     const [newInvoice] = await db.insert(invoices).values({
-      ...invoice,
-      amount: invoice.amount.toString(), // Convert number to string for database
-      dueDate: new Date(invoice.dueDate), // Ensure dueDate is a Date object
+      number: invoiceNumber,
+      userId: invoice.userId,
+      customerId: invoice.customerId,
+      amount: invoice.amount.toString(), // Convert number to string
+      status: invoice.status || 'pending',
+      dueDate: new Date(invoice.dueDate), // Ensure proper Date object
       createdAt: new Date(),
       stripePaymentId: null,
       stripePaymentUrl: null
     }).returning();
+
     return newInvoice;
   }
 
@@ -175,11 +182,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
-    // Ensure dates are properly handled
+    // Ensure dates and numbers are properly handled
     const updateData = {
-      ...invoice,
-      amount: invoice.amount.toString(), // Convert number to string for database
-      dueDate: new Date(invoice.dueDate), // Ensure dueDate is a Date object
+      customerId: invoice.customerId,
+      amount: invoice.amount.toString(), // Convert number to string
+      status: invoice.status || 'pending',
+      dueDate: new Date(invoice.dueDate), // Ensure proper Date object
+      userId: invoice.userId
     };
 
     const [updatedInvoice] = await db
@@ -197,8 +206,10 @@ export class DatabaseStorage implements IStorage {
   // Invoice items operations
   async createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> {
     const [newItem] = await db.insert(invoiceItems).values({
-      ...item,
-      unitPrice: item.unitPrice.toString(), // Convert number to string for database
+      description: item.description,
+      quantity: item.quantity.toString(), // Convert number to string
+      unitPrice: item.unitPrice.toString(), // Convert number to string
+      invoiceId: item.invoiceId
     }).returning();
     return newItem;
   }
