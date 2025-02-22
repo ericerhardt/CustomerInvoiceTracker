@@ -9,6 +9,8 @@ import React from 'react';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
 import type { InvoiceItem } from "@shared/schema";
 import express from "express";
+import { users } from "@shared/schema";
+import { db } from "./db";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -424,13 +426,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let event;
       try {
-        // Get Stripe instance for webhook events
-        const webhookStripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-          apiVersion: '2025-01-27.acacia',
-        });
+        // Get settings from first user (webhook doesn't have user context)
+        const [firstUser] = await db.select().from(users).limit(1);
+        if (!firstUser) {
+          throw new Error('No users found to get Stripe settings');
+        }
+
+        const stripeInstance = await getStripe(firstUser.id);
 
         console.log('Validating webhook signature...');
-        event = webhookStripe.webhooks.constructEvent(
+        event = stripeInstance.webhooks.constructEvent(
           req.body,
           sig,
           process.env.STRIPE_WEBHOOK_SECRET
