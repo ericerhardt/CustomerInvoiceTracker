@@ -176,16 +176,26 @@ export class DatabaseStorage implements IStorage {
     const existing = await this.getSettingsByUserId(settingsData.userId);
 
     if (existing) {
+      // For partial updates, merge with existing data
+      const updatedData = {
+        ...existing,
+        ...settingsData,
+        // Only convert taxRate to string if it's being updated
+        taxRate: settingsData.taxRate !== undefined ? settingsData.taxRate.toString() : existing.taxRate
+      };
+
       const [updated] = await db
         .update(settings)
-        .set({
-          ...settingsData,
-          taxRate: settingsData.taxRate.toString()
-        })
+        .set(updatedData)
         .where(eq(settings.userId, settingsData.userId))
         .returning();
       return updated;
     } else {
+      // For new settings, ensure all required fields are present
+      if (settingsData.taxRate === undefined) {
+        settingsData.taxRate = 10; // Default tax rate
+      }
+
       const [created] = await db
         .insert(settings)
         .values({
