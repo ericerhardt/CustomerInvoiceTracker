@@ -22,11 +22,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { PlusCircle, Trash2, Edit, Loader2 } from "lucide-react";
-import { Customer } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { CustomerForm } from "@/components/customer-form";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +30,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { PlusCircle, Trash2, Edit, Loader2 } from "lucide-react";
+import { Customer, insertCustomerSchema } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { CustomerForm } from "@/components/customer-form";
 
 const ITEMS_PER_PAGE = 10;
 

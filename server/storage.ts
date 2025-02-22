@@ -21,6 +21,8 @@ export interface IStorage {
   getCustomersByUserId(userId: number): Promise<Customer[]>;
   createCustomer(customer: InsertCustomer & { userId: number }): Promise<Customer>;
   getCustomer(id: number): Promise<Customer | undefined>;
+  updateCustomer(id: number, customer: InsertCustomer & { userId: number }): Promise<Customer>;
+  deleteCustomer(id: number): Promise<void>;
 
   // Invoice operations
   createInvoice(invoice: InsertInvoice & { userId: number }): Promise<Invoice>;
@@ -227,6 +229,19 @@ export class DatabaseStorage implements IStorage {
   async getUserByEmail(email: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
+  }
+
+  async updateCustomer(id: number, customer: InsertCustomer & { userId: number }): Promise<Customer> {
+    const [updatedCustomer] = await db
+      .update(customers)
+      .set(customer)
+      .where(eq(customers.id, id))
+      .returning();
+    return updatedCustomer;
+  }
+
+  async deleteCustomer(id: number): Promise<void> {
+    await db.delete(customers).where(eq(customers.id, id));
   }
 }
 
