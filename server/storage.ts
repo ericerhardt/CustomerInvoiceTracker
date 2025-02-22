@@ -1,3 +1,4 @@
+
 import { users, customers, invoices, invoiceItems, settings } from "@shared/schema";
 import type { User, Customer, Invoice, InvoiceItem, InsertUser, InsertCustomer, InsertInvoice, InsertInvoiceItem } from "@shared/schema";
 import type { Settings, InsertSettings } from "@shared/schema";
@@ -195,9 +196,8 @@ export class DatabaseStorage implements IStorage {
       return created;
     }
   }
-}
 
-async updateUserPassword(id: number, hashedPassword: string): Promise<User> {
+  async updateUserPassword(id: number, hashedPassword: string): Promise<User> {
     const [user] = await db
       .update(users)
       .set({ password: hashedPassword })
