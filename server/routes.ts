@@ -208,6 +208,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
+      // Ensure we have a complete URL for the redirect
+      const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      const redirectUrl = new URL(`/invoices/${invoice.id}`, baseUrl).toString();
+
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
           price: price.id,
@@ -216,9 +220,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           invoiceId: invoice.id.toString(),
         },
-        after_completion: { 
+        after_completion: {
           type: 'redirect',
-          redirect: { url: `${process.env.PUBLIC_URL || ''}/invoices/${invoice.id}` }
+          redirect: { url: redirectUrl }
         }
       });
 
@@ -306,6 +310,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
+      // Ensure we have a complete URL for the redirect
+      const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      const redirectUrl = new URL(`/invoices/${invoice.id}`, baseUrl).toString();
+
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
           price: price.id,
@@ -314,9 +322,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           invoiceId: invoice.id.toString(),
         },
-        after_completion: { 
+        after_completion: {
           type: 'redirect',
-          redirect: { url: `${process.env.PUBLIC_URL || ''}/invoices/${invoice.id}` }
+          redirect: { url: redirectUrl }
         }
       });
 
