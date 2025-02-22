@@ -15,6 +15,7 @@ type AuthContextType = {
   loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
+  resetPasswordMutation: UseMutationResult<void, Error, { email: string }>;
 };
 
 type LoginData = Pick<InsertUser, "username" | "password">;
@@ -65,6 +66,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (data: { email: string }) => {
+      const res = await apiRequest("POST", "/api/reset-password", data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to reset password");
+      }
+    },
+    onSuccess: () => {
+      toast({
+        title: "Reset link sent",
+        description: "Check your email for password reset instructions",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Reset failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/logout");
@@ -90,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginMutation,
         logoutMutation,
         registerMutation,
+        resetPasswordMutation,
       }}
     >
       {children}
