@@ -136,6 +136,7 @@ export class DatabaseStorage implements IStorage {
       .update(invoices)
       .set({
         ...invoice,
+        amount: String(invoice.amount),
         dueDate: new Date(invoice.dueDate),
       })
       .where(eq(invoices.id, id))
