@@ -97,7 +97,7 @@ export const settings = pgTable("settings", {
   sendGridApiKey: text("sendgrid_api_key").notNull(),
   sendGridFromEmail: text("sendgrid_from_email").notNull(),
   resetLinkUrl: text("reset_link_url").notNull().default("http://localhost:5000/reset-password"),
-  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default('10'),
+  taxRate: decimal("tax_rate").notNull().default('10'), 
 });
 
 export const insertSettingsSchema = createInsertSchema(settings)
