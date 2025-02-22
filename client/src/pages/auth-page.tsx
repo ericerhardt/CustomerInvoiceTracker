@@ -65,7 +65,8 @@ export default function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-4xl w-full px-4 grid md:grid-cols-2 gap-6">
         <div className="flex flex-col justify-center">
-          <h1 className="text-4xl font-bold mb-2">Invoice Generator</h1>
+          <h1 className="text-4xl font-bold mb-2">InGenZ</h1>
+          <h3 className="text-2xl font-bold mb-2">Invoice Generator</h3>
           <p className="text-gray-600 mb-6">
             Create professional invoices and get paid faster with our simple invoicing solution.
           </p>
