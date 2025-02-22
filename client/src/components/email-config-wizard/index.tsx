@@ -134,7 +134,7 @@ export function EmailConfigWizard() {
         <CardTitle className="text-2xl font-bold">Email Configuration</CardTitle>
         <Progress value={progress} className="h-2" />
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-6">
         <div className="flex items-center justify-center mb-8">
           {steps.map((step, index) => (
             <div
@@ -163,7 +163,7 @@ export function EmailConfigWizard() {
           ))}
         </div>
 
-        <div className="relative overflow-hidden min-h-[400px]">
+        <div className="relative h-[500px]">
           <AnimatePresence initial={false} custom={currentStep}>
             <motion.div
               key={currentStep}
@@ -176,24 +176,14 @@ export function EmailConfigWizard() {
                 x: { type: "spring", stiffness: 300, damping: 30 },
                 opacity: { duration: 0.2 },
               }}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={1}
-              onDragEnd={(e, { offset, velocity }) => {
-                const swipe = swipePower(offset.x, velocity.x);
-
-                if (swipe < -swipeConfidenceThreshold) {
-                  paginate(1);
-                } else if (swipe > swipeConfidenceThreshold) {
-                  paginate(-1);
-                }
-              }}
-              className="absolute w-full"
+              className="absolute inset-0 overflow-hidden"
             >
-              <div className="p-4">
+              <div className="h-full flex flex-col">
                 <h3 className="text-xl font-semibold mb-4">{steps[currentStep].title}</h3>
                 <p className="text-muted-foreground mb-6">{steps[currentStep].description}</p>
-                {steps[currentStep].component}
+                <div className="flex-1 overflow-y-auto">
+                  {steps[currentStep].component}
+                </div>
               </div>
             </motion.div>
           </AnimatePresence>
@@ -208,16 +198,11 @@ export function EmailConfigWizard() {
             <ArrowLeft className="mr-2 h-4 w-4" /> Previous
           </Button>
           {currentStep < steps.length - 1 ? (
-            <Button
-              onClick={() => paginate(1)}
-            >
+            <Button onClick={() => paginate(1)}>
               Next <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
-            <Button
-              variant="default"
-              onClick={() => window.location.reload()}
-            >
+            <Button variant="default" onClick={() => window.location.reload()}>
               Done
             </Button>
           )}

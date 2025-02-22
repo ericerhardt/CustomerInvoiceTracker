@@ -25,7 +25,7 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
   const { toast } = useToast();
 
   // Get existing settings first
-  const { data: existingSettings, isError: isExistingSettingsError, error: existingSettingsError } = useQuery({
+  const { data: existingSettings } = useQuery({
     queryKey: ["/api/settings"],
   });
 
@@ -38,11 +38,8 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
 
   const saveSenderEmail = useMutation({
     mutationFn: async (data: SenderEmailFormData) => {
-      console.log('Sending email settings update:', data);
-
-      // Merge with existing settings to prevent overwriting
       const updateData = {
-        ...(existingSettings || {}), // Handle potential null value
+        ...(existingSettings || {}),
         sendGridFromEmail: data.sendGridFromEmail,
       };
 
@@ -61,75 +58,78 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
       onComplete();
     },
     onError: (error: Error) => {
-      console.error('Failed to save sender email:', error);
       toast({
         title: "Error",
-        description: error.message || "An unknown error occurred.", //Added default error message
+        description: error.message || "An unknown error occurred.",
         variant: "destructive",
       });
     },
   });
 
   return (
-    <div className="space-y-6 max-h-[60vh] overflow-y-auto">
-      <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
-        <div className="p-2 bg-primary rounded-full">
-          <Mail className="w-6 h-6 text-primary-foreground" />
-        </div>
-        <div>
-          <h4 className="font-semibold">SendGrid Sender Email Address</h4>
-          <p className="text-sm text-muted-foreground">
-            This email address must be verified in your SendGrid account
-          </p>
+    <div className="flex flex-col space-y-6">
+      <div className="flex-none">
+        <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+          <div className="p-2 bg-primary rounded-full">
+            <Mail className="w-6 h-6 text-primary-foreground" />
+          </div>
+          <div>
+            <h4 className="font-semibold">SendGrid Sender Email Address</h4>
+            <p className="text-sm text-muted-foreground">
+              This email address must be verified in your SendGrid account
+            </p>
+          </div>
         </div>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit((data) => saveSenderEmail.mutate(data))} className="space-y-4">
-          <FormField
-            control={form.control}
-            name="sendGridFromEmail"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Sender Email</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    type="email"
-                    placeholder="your@company.com"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+      <div className="flex-grow overflow-y-auto px-1 py-2">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => saveSenderEmail.mutate(data))} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="sendGridFromEmail"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sender Email</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="email"
+                      placeholder="your@company.com"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={saveSenderEmail.isPending}
-          >
-            {saveSenderEmail.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Sender Email"
-            )}
-          </Button>
-        </form>
-      </Form>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={saveSenderEmail.isPending}
+            >
+              {saveSenderEmail.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Sender Email"
+              )}
+            </Button>
+          </form>
+        </Form>
 
-      <div className="text-sm text-muted-foreground mt-8 pb-4">
-        <p className="font-semibold mb-2">How to verify your sender email:</p>
-        <ol className="list-decimal list-inside space-y-2">
-          <li>Log in to your SendGrid account</li>
-          <li>Go to Settings → Sender Authentication</li>
-          <li>Click on "Verify a Single Sender"</li>
-          <li>Fill in your sender details and submit</li>
-          <li>Check your email for the verification link</li>
-        </ol>
+        <div className="text-sm text-muted-foreground mt-8">
+          <p className="font-semibold mb-2">How to verify your sender email:</p>
+          <ol className="list-decimal list-inside space-y-2">
+            <li>Log in to your SendGrid account</li>
+            <li>Go to Settings → Sender Authentication</li>
+            <li>Click on "Verify a Single Sender"</li>
+            <li>Fill in your sender details and submit</li>
+            <li>Check your email for the verification link</li>
+          </ol>
+        </div>
       </div>
     </div>
   );
