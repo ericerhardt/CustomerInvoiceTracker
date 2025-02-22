@@ -7,6 +7,7 @@ import Stripe from "stripe";
 import { renderToBuffer } from '@react-pdf/renderer';
 import React from 'react';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
+import type { InvoiceItem } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -26,7 +27,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     stripe = new Stripe(settings.stripeSecretKey, {
-      apiVersion: '2022-11-15',  // Changed to a version that supports payment link operations
+      apiVersion: '2022-11-15',
     });
 
     return stripe;
@@ -226,32 +227,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.getSettingsByUserId(req.user.id);
       let pdfBuffer: Buffer | undefined;
 
-      try {
-        // Generate PDF
-        const pdfDocument = React.createElement(InvoicePDF, {
-          items: items.map(item => ({
-            description: item.description,
-            quantity: Number(item.quantity),
-            unitPrice: Number(item.unitPrice)
-          })),
-          customer,
-          dueDate: invoice.dueDate.toISOString(),
-          invoiceNumber: invoice.number,
-          settings: settings ? {
-            companyName: settings.companyName || '',
-            companyAddress: settings.companyAddress || '',
-            companyEmail: settings.companyEmail || '',
-            taxRate: Number(settings.taxRate),
-          } : undefined
-        });
+      pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
 
-        console.log('Generating PDF buffer for new invoice...');
-        pdfBuffer = await renderToBuffer(pdfDocument);
-        console.log('PDF buffer generated successfully for new invoice');
-      } catch (pdfError) {
-        console.error('Failed to generate PDF:', pdfError);
-        // Continue without PDF if generation fails
-      }
 
       // Send email to customer using settings
       if (customer && settings?.sendGridApiKey) {
@@ -266,6 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           dueDate: invoice.dueDate,
           paymentUrl: paymentLink.url,
           pdfBuffer,
+          userId: req.user.id
         });
       }
 
@@ -324,32 +302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       let pdfBuffer: Buffer | undefined;
-      try {
-        // Generate PDF using React.createElement
-        const pdfDocument = React.createElement(InvoicePDF, {
-          items: items.map(item => ({
-            description: item.description,
-            quantity: Number(item.quantity),
-            unitPrice: Number(item.unitPrice)
-          })),
-          customer,
-          dueDate: invoice.dueDate.toISOString(),
-          invoiceNumber: invoice.number,
-          settings: settings ? {
-            companyName: settings.companyName || '',
-            companyAddress: settings.companyAddress || '',
-            companyEmail: settings.companyEmail || '',
-            taxRate: Number(settings.taxRate),
-          } : undefined
-        });
-
-        console.log('Generating PDF buffer...');
-        pdfBuffer = await renderToBuffer(pdfDocument);
-        console.log('PDF buffer generated successfully');
-      } catch (pdfError) {
-        console.error('Failed to generate PDF:', pdfError);
-        // Continue without PDF if generation fails
-      }
+      pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
 
       // Send email with PDF attachment
       if (settings?.sendGridApiKey) {
@@ -357,7 +310,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw new Error('Invalid SendGrid API key format. Must start with "SG."');
         }
 
-        console.log('Sending email with PDF attachment...');
         process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
         await sendInvoiceEmail({
           to: customer.email,
@@ -366,8 +318,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           dueDate: invoice.dueDate,
           paymentUrl: paymentLink.url,
           pdfBuffer,
+          userId: req.user.id
         });
-        console.log('Email sent successfully');
       }
 
       res.json(updatedInvoice);
@@ -416,7 +368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/webhook/stripe", async (req, res) => {
+  app.post("/webhook", async (req, res) => {
     const sig = req.headers['stripe-signature'];
 
     if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -424,7 +376,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const stripeInstance = stripe || new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      // Get Stripe instance using the webhook secret key
+      const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
         apiVersion: '2022-11-15',
       });
 
@@ -434,12 +387,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
-      if (event.type === 'payment_intent.succeeded') {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        const invoiceId = paymentIntent.metadata?.invoiceId;
+      console.log('Received Stripe webhook event:', event.type);
 
-        if (invoiceId) {
-          await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+      // Handle payment_intent events
+      switch (event.type) {
+        case 'payment_intent.succeeded': {
+          const paymentIntent = event.data.object as Stripe.PaymentIntent;
+          console.log('Payment succeeded:', paymentIntent.id);
+
+          const invoiceId = paymentIntent.metadata?.invoiceId;
+          if (invoiceId) {
+            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+            console.log(`Updated invoice ${invoiceId} status to paid`);
+          }
+          break;
+        }
+        case 'payment_intent.payment_failed': {
+          const paymentIntent = event.data.object as Stripe.PaymentIntent;
+          console.log('Payment failed:', paymentIntent.id);
+
+          const invoiceId = paymentIntent.metadata?.invoiceId;
+          if (invoiceId) {
+            await storage.updateInvoiceStatus(parseInt(invoiceId), 'failed');
+            console.log(`Updated invoice ${invoiceId} status to failed`);
+          }
+          break;
         }
       }
 
@@ -450,6 +422,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).send(`Webhook Error: ${error.message}`);
     }
   });
+
+  // Helper function for generating PDF
+  async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
+    try {
+      const pdfDocument = React.createElement(InvoicePDF, {
+        items: items.map(item => ({
+          description: item.description,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.unitPrice)
+        })),
+        customer,
+        dueDate: invoice.dueDate.toISOString(),
+        invoiceNumber: invoice.number,
+        settings: settings ? {
+          companyName: settings.companyName || '',
+          companyAddress: settings.companyAddress || '',
+          companyEmail: settings.companyEmail || '',
+          taxRate: Number(settings.taxRate),
+        } : undefined
+      });
+
+      return await renderToBuffer(pdfDocument);
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      return undefined;
+    }
+  }
+
 
   // Settings endpoints
   app.get("/api/settings", async (req, res) => {
