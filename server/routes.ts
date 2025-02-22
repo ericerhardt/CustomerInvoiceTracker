@@ -210,7 +210,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Ensure we have a complete URL for the redirect
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/invoices/${invoice.id}`, baseUrl).toString();
+      const redirectUrl = new URL(`/invoice/${invoice.id}`, baseUrl).toString();
 
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
@@ -312,7 +312,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Ensure we have a complete URL for the redirect
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/invoices/${invoice.id}`, baseUrl).toString();
+      const redirectUrl = new URL(`/invoice/${invoice.id}`, baseUrl).toString();
 
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
