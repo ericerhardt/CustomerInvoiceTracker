@@ -196,12 +196,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create Stripe payment link
+      // Create Stripe payment link with proper metadata
       const price = await stripeInstance.prices.create({
         currency: 'usd',
         unit_amount: Math.round(Number(invoice.amount) * 100),
         product_data: {
           name: `Invoice ${invoice.number}`,
+          metadata: {
+            invoiceId: invoice.id.toString(),
+          },
         },
       });
 
@@ -213,6 +216,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: {
           invoiceId: invoice.id.toString(),
         },
+        after_completion: { 
+          type: 'redirect',
+          redirect: { url: `${process.env.PUBLIC_URL || ''}/invoices/${invoice.id}` }
+        }
       });
 
       // Update invoice with Stripe payment details
@@ -384,14 +391,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).send('Webhook signature or secret missing');
     }
 
+    let event;
     try {
-      // Get Stripe instance using the webhook secret key
-      const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-        apiVersion: '2022-11-15',
+      // Get Stripe instance for webhook events
+      const webhookStripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+        apiVersion: '2022-11-15', // Using supported version
       });
 
       console.log('Validating webhook signature...');
-      const event = stripeInstance.webhooks.constructEvent(
+      event = webhookStripe.webhooks.constructEvent(
         req.body,
         sig,
         process.env.STRIPE_WEBHOOK_SECRET
@@ -403,8 +411,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         created: new Date(event.created * 1000).toISOString()
       });
 
-      // Handle payment_intent events
+      // Handle payment events
       switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          console.log('Processing completed checkout session:', {
+            sessionId: session.id,
+            metadata: session.metadata
+          });
+
+          const invoiceId = session.metadata?.invoiceId;
+          if (invoiceId) {
+            console.log(`Updating invoice ${invoiceId} status to paid`);
+            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+            console.log(`Successfully updated invoice ${invoiceId} status to paid`);
+          }
+          break;
+        }
         case 'payment_intent.succeeded': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
           console.log('Processing successful payment:', {
@@ -420,10 +443,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Updating invoice ${invoiceId} status to paid`);
             await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
             console.log(`Successfully updated invoice ${invoiceId} status to paid`);
-          } else {
-            console.warn('No invoiceId found in payment intent metadata', {
-              paymentIntentId: paymentIntent.id
-            });
           }
           break;
         }
@@ -443,10 +462,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`Updating invoice ${invoiceId} status to failed`);
             await storage.updateInvoiceStatus(parseInt(invoiceId), 'failed');
             console.log(`Successfully updated invoice ${invoiceId} status to failed`);
-          } else {
-            console.warn('No invoiceId found in payment intent metadata', {
-              paymentIntentId: paymentIntent.id
-            });
           }
           break;
         }
