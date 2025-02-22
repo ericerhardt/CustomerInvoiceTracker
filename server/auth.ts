@@ -6,6 +6,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import { sendPasswordResetEmail } from "./email";
 
 declare global {
   namespace Express {
@@ -104,11 +105,13 @@ export function setupAuth(app: Express) {
         const resetToken = randomBytes(32).toString('hex');
         const resetUrl = `${process.env.APP_URL || 'http://localhost:5000'}/reset-password`;
 
-        // Store reset token in database (you may want to add this to your schema)
-        // For now we'll use the session store temporarily
-        storage.sessionStore.set(`pwreset_${resetToken}`, user.id, (err) => {
-          if (err) throw err;
-        });
+        // Store reset token with user ID
+        const tokenData = {
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
+        };
+
+        await storage.sessionStore.set(`pwreset_${resetToken}`, JSON.stringify(tokenData));
 
         await sendPasswordResetEmail({
           to: email,
@@ -131,13 +134,19 @@ export function setupAuth(app: Express) {
     try {
       const { token, newPassword } = req.body;
 
-      storage.sessionStore.get(`pwreset_${token}`, async (err, userId) => {
-        if (err || !userId) {
+      storage.sessionStore.get(`pwreset_${token}`, async (err, data) => {
+        if (err || !data) {
           return res.status(400).json({ message: 'Invalid or expired reset token' });
         }
 
+        const tokenData = JSON.parse(data.toString());
+        const now = new Date();
+        if (now > new Date(tokenData.expiresAt)) {
+          return res.status(400).json({ message: 'Reset token has expired' });
+        }
+
         // Update password
-        const user = await storage.getUser(userId);
+        const user = await storage.getUser(tokenData.userId);
         if (!user) {
           return res.status(400).json({ message: 'User not found' });
         }
@@ -146,9 +155,7 @@ export function setupAuth(app: Express) {
         await storage.updateUserPassword(user.id, hashedPassword);
 
         // Clean up the reset token
-        storage.sessionStore.destroy(`pwreset_${token}`, (err) => {
-          if (err) console.error('Failed to cleanup reset token:', err);
-        });
+        storage.sessionStore.destroy(`pwreset_${token}`);
 
         res.json({ message: 'Password updated successfully' });
       });
