@@ -70,6 +70,57 @@ export async function sendInvoiceEmail({
 
     console.log('Attempting to send email to:', to);
     console.log('Using sender email:', process.env.SEND_FROM_EMAIL || 'eric.erhardt@e3dev.solutions');
+
+interface SendPasswordResetEmailParams {
+  to: string;
+  resetToken: string;
+  resetUrl: string;
+}
+
+export async function sendPasswordResetEmail({
+  to,
+  resetToken,
+  resetUrl,
+}: SendPasswordResetEmailParams) {
+  try {
+    if (!process.env.SENDGRID_API_KEY) {
+      throw new Error('SendGrid API key is not configured');
+    }
+
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+    const msg = {
+      to,
+      from: {
+        email: process.env.SEND_FROM_EMAIL || 'eric.erhardt@e3dev.solutions',
+        name: 'Invoice System'
+      },
+      subject: 'Password Reset Request',
+      text: `Click this link to reset your password: ${resetUrl}?token=${resetToken}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Password Reset Request</h2>
+          <p>Click the button below to reset your password:</p>
+          <p>
+            <a href="${resetUrl}?token=${resetToken}" style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 16px;">
+              Reset Password
+            </a>
+          </p>
+          <p style="margin-top: 16px; color: #666;">
+            If you didn't request this reset, please ignore this email.
+          </p>
+        </div>
+      `,
+    };
+
+    await sgMail.send(msg);
+    return true;
+  } catch (error) {
+    console.error('Failed to send password reset email:', error);
+    throw error;
+  }
+}
+
     await sgMail.send(msg);
     console.log(`Email sent successfully to ${to} for invoice ${invoiceNumber}`);
     return true;
