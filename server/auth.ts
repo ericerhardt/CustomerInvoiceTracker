@@ -99,11 +99,11 @@ export function setupAuth(app: Express) {
     try {
       const { email } = req.body;
       const user = await storage.getUserByUsername(email);
-      
+
       if (user) {
         const resetToken = randomBytes(32).toString('hex');
         const resetUrl = `${process.env.APP_URL || 'http://localhost:5000'}/reset-password`;
-        
+
         // Store reset token in database (you may want to add this to your schema)
         // For now we'll use the session store temporarily
         storage.sessionStore.set(`pwreset_${resetToken}`, user.id, (err) => {
@@ -130,7 +130,7 @@ export function setupAuth(app: Express) {
   app.post("/api/reset-password/confirm", async (req, res) => {
     try {
       const { token, newPassword } = req.body;
-      
+
       storage.sessionStore.get(`pwreset_${token}`, async (err, userId) => {
         if (err || !userId) {
           return res.status(400).json({ message: 'Invalid or expired reset token' });
@@ -144,7 +144,7 @@ export function setupAuth(app: Express) {
 
         const hashedPassword = await hashPassword(newPassword);
         await storage.updateUserPassword(user.id, hashedPassword);
-        
+
         // Clean up the reset token
         storage.sessionStore.destroy(`pwreset_${token}`, (err) => {
           if (err) console.error('Failed to cleanup reset token:', err);
@@ -157,3 +157,4 @@ export function setupAuth(app: Express) {
       res.status(500).json({ message: 'Failed to reset password' });
     }
   });
+}
