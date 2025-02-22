@@ -42,12 +42,12 @@ export default function Dashboard() {
     queryKey: ["/api/customers"],
   });
 
-  const deletePaymentLink = useMutation({
+  const deleteInvoice = useMutation({
     mutationFn: async (invoiceId: number) => {
-      const res = await apiRequest("DELETE", `/api/invoices/${invoiceId}/payment-link`);
+      const res = await apiRequest("DELETE", `/api/invoices/${invoiceId}`);
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.message || 'Failed to delete payment link');
+        throw new Error(error.message || 'Failed to delete invoice');
       }
       return res.json();
     },
@@ -55,7 +55,7 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       toast({
         title: "Success",
-        description: "Payment link deleted successfully",
+        description: "Invoice deleted successfully",
       });
     },
     onError: (error: Error) => {
@@ -120,7 +120,7 @@ export default function Dashboard() {
 
   const handleDelete = async (invoiceId: number) => {
     try {
-      await deletePaymentLink.mutateAsync(invoiceId);
+      await deleteInvoice.mutateAsync(invoiceId);
     } catch (error) {
       // Error is already handled in the mutation
     }
