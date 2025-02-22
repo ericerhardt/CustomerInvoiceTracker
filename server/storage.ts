@@ -1,4 +1,3 @@
-
 import { users, customers, invoices, invoiceItems, settings } from "@shared/schema";
 import type { User, Customer, Invoice, InvoiceItem, InsertUser, InsertCustomer, InsertInvoice, InsertInvoiceItem } from "@shared/schema";
 import type { Settings, InsertSettings } from "@shared/schema";
@@ -16,6 +15,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPassword(id: number, hashedPassword: string): Promise<User>;
+  getUserByEmail(email: string): Promise<User | undefined>; // Added method
 
   // Customer operations
   getCustomersByUserId(userId: number): Promise<Customer[]>;
@@ -203,6 +203,11 @@ export class DatabaseStorage implements IStorage {
       .set({ password: hashedPassword })
       .where(eq(users.id, id))
       .returning();
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 }

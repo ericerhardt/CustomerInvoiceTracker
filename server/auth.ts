@@ -100,7 +100,7 @@ export function setupAuth(app: Express) {
     try {
       console.log('Processing password reset request for email:', req.body.email);
       const { email } = req.body;
-      const user = await storage.getUserByUsername(email);
+      const user = await storage.getUserByEmail(email);
 
       if (user) {
         console.log('User found, generating reset token...');
@@ -114,7 +114,7 @@ export function setupAuth(app: Express) {
         };
 
         console.log('Storing reset token in session store...');
-        await storage.sessionStore.set(`pwreset_${resetToken}`, JSON.stringify(tokenData));
+        await storage.sessionStore.set(`pwreset_${resetToken}`, tokenData);
 
         console.log('Attempting to send password reset email...');
         try {
