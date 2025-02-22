@@ -8,6 +8,7 @@ import { renderToBuffer } from '@react-pdf/renderer';
 import React from 'react';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
 import type { InvoiceItem } from "@shared/schema";
+import express from "express";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -402,113 +403,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/webhook", async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    console.log('Received Stripe webhook request:', {
-      method: req.method,
-      path: req.path,
-      signature: sig ? 'Present' : 'Missing',
-    });
-
-    if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
-      console.error('Webhook signature or secret missing', {
+  app.post("/webhook",
+    express.raw({ type: 'application/json' }),
+    async (req, res) => {
+      const sig = req.headers['stripe-signature'];
+      console.log('Received Stripe webhook request:', {
+        method: req.method,
+        path: req.path,
         signature: sig ? 'Present' : 'Missing',
-        secret: process.env.STRIPE_WEBHOOK_SECRET ? 'Present' : 'Missing'
-      });
-      return res.status(400).send('Webhook signature or secret missing');
-    }
-
-    let event;
-    try {
-      // Get Stripe instance for webhook events
-      const webhookStripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-        apiVersion: '2022-11-15', // Using supported version
+        body: req.body ? 'Present' : 'Missing'
       });
 
-      console.log('Validating webhook signature...');
-      event = webhookStripe.webhooks.constructEvent(
-        req.body,
-        sig,
-        process.env.STRIPE_WEBHOOK_SECRET
-      );
-
-      console.log('Webhook event validated:', {
-        type: event.type,
-        id: event.id,
-        created: new Date(event.created * 1000).toISOString()
-      });
-
-      // Handle payment events
-      switch (event.type) {
-        case 'checkout.session.completed': {
-          const session = event.data.object as Stripe.Checkout.Session;
-          console.log('Processing completed checkout session:', {
-            sessionId: session.id,
-            metadata: session.metadata
-          });
-
-          const invoiceId = session.metadata?.invoiceId;
-          if (invoiceId) {
-            console.log(`Updating invoice ${invoiceId} status to paid`);
-            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-            console.log(`Successfully updated invoice ${invoiceId} status to paid`);
-          }
-          break;
-        }
-        case 'payment_intent.succeeded': {
-          const paymentIntent = event.data.object as Stripe.PaymentIntent;
-          console.log('Processing successful payment:', {
-            paymentIntentId: paymentIntent.id,
-            amount: paymentIntent.amount,
-            currency: paymentIntent.currency,
-            status: paymentIntent.status,
-            metadata: paymentIntent.metadata
-          });
-
-          const invoiceId = paymentIntent.metadata?.invoiceId;
-          if (invoiceId) {
-            console.log(`Updating invoice ${invoiceId} status to paid`);
-            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-            console.log(`Successfully updated invoice ${invoiceId} status to paid`);
-          }
-          break;
-        }
-        case 'payment_intent.payment_failed': {
-          const paymentIntent = event.data.object as Stripe.PaymentIntent;
-          console.log('Processing failed payment:', {
-            paymentIntentId: paymentIntent.id,
-            amount: paymentIntent.amount,
-            currency: paymentIntent.currency,
-            status: paymentIntent.status,
-            metadata: paymentIntent.metadata,
-            errorMessage: paymentIntent.last_payment_error?.message
-          });
-
-          const invoiceId = paymentIntent.metadata?.invoiceId;
-          if (invoiceId) {
-            console.log(`Updating invoice ${invoiceId} status to failed`);
-            await storage.updateInvoiceStatus(parseInt(invoiceId), 'failed');
-            console.log(`Successfully updated invoice ${invoiceId} status to failed`);
-          }
-          break;
-        }
-        default: {
-          console.log('Unhandled event type:', event.type);
-        }
+      if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+        console.error('Webhook signature or secret missing', {
+          signature: sig ? 'Present' : 'Missing',
+          secret: process.env.STRIPE_WEBHOOK_SECRET ? 'Present' : 'Missing'
+        });
+        return res.status(400).send('Webhook signature or secret missing');
       }
 
-      console.log('Webhook processing completed successfully');
-      res.json({ received: true });
-    } catch (err) {
-      const error = err as Error;
-      console.error('Webhook Error:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-      return res.status(400).send(`Webhook Error: ${error.message}`);
+      let event;
+      try {
+        // Get Stripe instance for webhook events
+        const webhookStripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+          apiVersion: '2025-01-27.acacia',
+        });
+
+        console.log('Validating webhook signature...');
+        event = webhookStripe.webhooks.constructEvent(
+          req.body,
+          sig,
+          process.env.STRIPE_WEBHOOK_SECRET
+        );
+
+        console.log('Webhook event validated:', {
+          type: event.type,
+          id: event.id,
+          created: new Date(event.created * 1000).toISOString()
+        });
+
+        // Handle payment events
+        switch (event.type) {
+          case 'checkout.session.completed': {
+            const session = event.data.object as Stripe.Checkout.Session;
+            console.log('Processing completed checkout session:', {
+              sessionId: session.id,
+              metadata: session.metadata
+            });
+
+            const invoiceId = session.metadata?.invoiceId;
+            if (invoiceId) {
+              console.log(`Updating invoice ${invoiceId} status to paid`);
+              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Successfully updated invoice ${invoiceId} status to paid`);
+            }
+            break;
+          }
+          case 'payment_intent.succeeded': {
+            const paymentIntent = event.data.object as Stripe.PaymentIntent;
+            console.log('Processing successful payment:', {
+              paymentIntentId: paymentIntent.id,
+              amount: paymentIntent.amount,
+              currency: paymentIntent.currency,
+              status: paymentIntent.status,
+              metadata: paymentIntent.metadata
+            });
+
+            const invoiceId = paymentIntent.metadata?.invoiceId;
+            if (invoiceId) {
+              console.log(`Updating invoice ${invoiceId} status to paid`);
+              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Successfully updated invoice ${invoiceId} status to paid`);
+            }
+            break;
+          }
+          default: {
+            console.log('Unhandled event type:', event.type);
+          }
+        }
+
+        console.log('Webhook processing completed successfully');
+        res.json({ received: true });
+      } catch (err) {
+        const error = err as Error;
+        console.error('Webhook Error:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        return res.status(400).send(`Webhook Error: ${error.message}`);
+      }
     }
-  });
+  );
 
   // Helper function for generating PDF
   async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
