@@ -55,7 +55,7 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  // Implement User operations
+  // User operations
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
@@ -85,7 +85,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  // Implement Customer operations
+  // Customer operations
   async getCustomersByUserId(userId: number): Promise<Customer[]> {
     return await db.select().from(customers).where(eq(customers.userId, userId));
   }
@@ -113,7 +113,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(customers).where(eq(customers.id, id));
   }
 
-  // Implement Invoice operations
+  // Invoice operations
   async updateInvoiceStatus(id: number, status: string): Promise<Invoice> {
     console.log(`Attempting to update invoice ${id} status to ${status}`);
     try {
@@ -145,7 +145,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInvoice(invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
-    const [newInvoice] = await db.insert(invoices).values(invoice).returning();
+    const [newInvoice] = await db.insert(invoices).values({
+      ...invoice,
+      amount: invoice.amount.toString(), // Convert number to string for database
+      createdAt: new Date(),
+      stripePaymentId: null,
+      stripePaymentUrl: null
+    }).returning();
     return newInvoice;
   }
 
@@ -170,7 +176,11 @@ export class DatabaseStorage implements IStorage {
   async updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
     const [updatedInvoice] = await db
       .update(invoices)
-      .set(invoice)
+      .set({
+        ...invoice,
+        amount: invoice.amount.toString(), // Convert number to string for database
+        updatedAt: new Date()
+      })
       .where(eq(invoices.id, id))
       .returning();
     return updatedInvoice;
@@ -180,9 +190,12 @@ export class DatabaseStorage implements IStorage {
     await db.delete(invoices).where(eq(invoices.id, id));
   }
 
-  // Implement Invoice items operations
+  // Invoice items operations
   async createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> {
-    const [newItem] = await db.insert(invoiceItems).values(item).returning();
+    const [newItem] = await db.insert(invoiceItems).values({
+      ...item,
+      unitPrice: item.unitPrice.toString(), // Convert number to string for database
+    }).returning();
     return newItem;
   }
 
@@ -194,24 +207,24 @@ export class DatabaseStorage implements IStorage {
     await db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
   }
 
-  // Implement Settings operations
+  // Settings operations
   async getSettingsByUserId(userId: number): Promise<Settings | undefined> {
     const [userSettings] = await db.select().from(settings).where(eq(settings.userId, userId));
     return userSettings;
   }
 
-  async upsertSettings(settings: InsertSettings & { userId: number }): Promise<Settings> {
+  async upsertSettings(settingsData: InsertSettings & { userId: number }): Promise<Settings> {
     // First try to update
     const [updated] = await db
       .update(settings)
-      .set(settings)
-      .where(eq(settings.userId, settings.userId))
+      .set(settingsData)
+      .where(eq(settings.userId, settingsData.userId))
       .returning();
 
     if (updated) return updated;
 
     // If no update happened, insert
-    const [inserted] = await db.insert(settings).values(settings).returning();
+    const [inserted] = await db.insert(settings).values(settingsData).returning();
     return inserted;
   }
 }
