@@ -197,7 +197,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async updateUserPassword(id: number, hashedPassword: string): Promise<User> {
+  async updateUserPassword(id: number, hashedPassword: string) {
     const [user] = await db
       .update(users)
       .set({ password: hashedPassword })
