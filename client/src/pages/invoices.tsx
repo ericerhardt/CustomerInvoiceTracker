@@ -161,7 +161,7 @@ export default function InvoicesPage() {
                   return (
                     <TableRow key={invoice.id}>
                       <TableCell>
-                        <Link href={`/invoice/${invoice.id}`}>
+                        <Link href={`/create-invoice/${invoice.id}`}>
                           <span className="text-primary hover:underline cursor-pointer">
                             {invoice.number}
                           </span>
