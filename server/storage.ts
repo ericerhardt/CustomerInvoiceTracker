@@ -174,13 +174,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
+    // Ensure dates are properly handled
+    const updateData = {
+      ...invoice,
+      amount: invoice.amount.toString(), // Convert number to string for database
+      dueDate: new Date(invoice.dueDate), // Ensure dueDate is a Date object
+    };
+
     const [updatedInvoice] = await db
       .update(invoices)
-      .set({
-        ...invoice,
-        amount: invoice.amount.toString(), // Convert number to string for database
-        updatedAt: new Date()
-      })
+      .set(updateData)
       .where(eq(invoices.id, id))
       .returning();
     return updatedInvoice;
