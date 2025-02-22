@@ -197,9 +197,7 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
-
-  async updateUserPassword(id: number, hashedPassword: string): Promise<User> {
+async updateUserPassword(id: number, hashedPassword: string): Promise<User> {
     const [user] = await db
       .update(users)
       .set({ password: hashedPassword })
@@ -207,3 +205,6 @@ export const storage = new DatabaseStorage();
       .returning();
     return user;
   }
+}
+
+export const storage = new DatabaseStorage();
