@@ -27,7 +27,7 @@ export interface IStorage {
   updateInvoiceStatus(id: number, status: string): Promise<Invoice>;
   updateInvoicePayment(id: number, paymentId: string, paymentUrl: string): Promise<Invoice>;
   updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice>;
-  deleteInvoice(id: number): Promise<void>; // Add this new method
+  deleteInvoice(id: number): Promise<void>;
 
   // Invoice items
   createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem>;
@@ -45,7 +45,7 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({ 
+    this.sessionStore = new PostgresSessionStore({
       pool,
       createTableIfMissing: true
     });
@@ -81,17 +81,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInvoice(invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
-    const number = `INV-${Date.now()}`;
     const [newInvoice] = await db
       .insert(invoices)
       .values({
         ...invoice,
-        number,
+        number: `INV-${Date.now()}`,
         status: 'pending',
         createdAt: new Date(),
         stripePaymentId: null,
         stripePaymentUrl: null,
-        dueDate: new Date(invoice.dueDate), 
+        dueDate: new Date(invoice.dueDate),
+        amount: invoice.amount.toString()
       })
       .returning();
     return newInvoice;
@@ -118,7 +118,7 @@ export class DatabaseStorage implements IStorage {
   async updateInvoicePayment(id: number, paymentId: string, paymentUrl: string): Promise<Invoice> {
     const [invoice] = await db
       .update(invoices)
-      .set({ 
+      .set({
         stripePaymentId: paymentId,
         stripePaymentUrl: paymentUrl
       })
@@ -132,7 +132,7 @@ export class DatabaseStorage implements IStorage {
       .update(invoices)
       .set({
         ...invoice,
-        amount: String(invoice.amount),
+        amount: invoice.amount.toString(),
         dueDate: new Date(invoice.dueDate),
       })
       .where(eq(invoices.id, id))
@@ -141,9 +141,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteInvoice(id: number): Promise<void> {
-    // First delete all invoice items
     await this.deleteInvoiceItems(id);
-    // Then delete the invoice
     await db.delete(invoices).where(eq(invoices.id, id));
   }
 
@@ -152,8 +150,8 @@ export class DatabaseStorage implements IStorage {
       .insert(invoiceItems)
       .values({
         ...item,
-        quantity: Number(item.quantity),
-        unitPrice: Number(item.unitPrice),
+        quantity: item.quantity.toString(),
+        unitPrice: item.unitPrice.toString()
       })
       .returning();
     return newItem;
@@ -164,9 +162,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteInvoiceItems(invoiceId: number): Promise<void> {
-    await db
-      .delete(invoiceItems)
-      .where(eq(invoiceItems.invoiceId, invoiceId));
+    await db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
   }
 
   async getSettingsByUserId(userId: number): Promise<Settings | undefined> {
@@ -182,7 +178,7 @@ export class DatabaseStorage implements IStorage {
         .update(settings)
         .set({
           ...settingsData,
-          taxRate: String(settingsData.taxRate), // Convert number to string for decimal column
+          taxRate: settingsData.taxRate.toString()
         })
         .where(eq(settings.userId, settingsData.userId))
         .returning();
@@ -192,7 +188,7 @@ export class DatabaseStorage implements IStorage {
         .insert(settings)
         .values({
           ...settingsData,
-          taxRate: String(settingsData.taxRate), // Convert number to string for decimal column
+          taxRate: settingsData.taxRate.toString()
         })
         .returning();
       return created;
