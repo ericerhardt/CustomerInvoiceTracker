@@ -81,9 +81,17 @@ export async function sendInvoiceEmail({
   } catch (error) {
     console.error('Failed to send invoice email:', error);
     if (error instanceof Error) {
-      const errorMessage = error.message;
-      console.error('SendGrid Error Details:', errorMessage);
-      throw new Error(`Failed to send invoice email: ${errorMessage}`);
+      console.error('SendGrid Error Details:', error.message);
+      if (error.message.includes('Invalid API key')) {
+        throw new Error('Invalid SendGrid API key. Please check your configuration.');
+      }
+      if (error.message.includes('forbidden')) {
+        throw new Error('SendGrid API key does not have permission to send emails. Please check your API key permissions.');
+      }
+      if (error.message.includes('The from address does not match a verified Sender Identity')) {
+        throw new Error(`Email sender ${process.env.SENDGRID_FROM_EMAIL || 'noreply@invoicegenerator.com'} not verified with SendGrid. Please verify your sender email in SendGrid dashboard.`);
+      }
+      throw error;
     }
     throw new Error('Failed to send invoice email');
   }
@@ -99,6 +107,10 @@ export async function sendPasswordResetEmail({
 
     if (!process.env.SENDGRID_API_KEY) {
       throw new Error('SendGrid API key is not configured');
+    }
+
+    if (!process.env.SENDGRID_API_KEY.startsWith('SG.')) {
+      throw new Error('Invalid SendGrid API key format. Must start with "SG."');
     }
 
     if (!process.env.SENDGRID_FROM_EMAIL) {

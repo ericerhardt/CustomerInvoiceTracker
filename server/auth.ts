@@ -108,13 +108,18 @@ export function setupAuth(app: Express) {
         const resetUrl = `${process.env.APP_URL || 'http://localhost:5000'}/reset-password`;
 
         // Store reset token with user ID
-        const tokenData = {
-          userId: user.id,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
-        };
-
         console.log('Storing reset token in session store...');
-        await storage.sessionStore.set(`pwreset_${resetToken}`, tokenData);
+        const sessionData = {
+          cookie: {
+            originalMaxAge: 24 * 60 * 60 * 1000, // 24 hours
+            expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+            secure: process.env.NODE_ENV === 'production',
+            httpOnly: true,
+          },
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        };
+        await storage.sessionStore.set(`pwreset_${resetToken}`, sessionData);
 
         console.log('Attempting to send password reset email...');
         try {
