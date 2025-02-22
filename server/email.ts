@@ -1,3 +1,4 @@
+
 import sgMail from '@sendgrid/mail';
 
 interface SendInvoiceEmailParams {
@@ -7,6 +8,12 @@ interface SendInvoiceEmailParams {
   dueDate: Date;
   paymentUrl: string;
   pdfBuffer?: Buffer;
+}
+
+interface SendPasswordResetEmailParams {
+  to: string;
+  resetToken: string;
+  resetUrl: string;
 }
 
 export async function sendInvoiceEmail({
@@ -35,7 +42,6 @@ export async function sendInvoiceEmail({
       throw new Error('Invalid SendGrid API key format. Must start with "SG."');
     }
 
-    // Reset the API key to ensure we're using the latest one
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
     const msg = {
@@ -68,13 +74,23 @@ export async function sendInvoiceEmail({
       ] : undefined,
     };
 
-    console.log('Attempting to send email to:', to);
-    console.log('Using sender email:', process.env.SEND_FROM_EMAIL || 'eric.erhardt@e3dev.solutions');
+    await sgMail.send(msg);
+    console.log(`Email sent successfully to ${to} for invoice ${invoiceNumber}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send email:', error);
+    if (error instanceof Error) {
+      const errorMessage = error.message;
+      console.error('SendGrid Error Details:', errorMessage);
 
-interface SendPasswordResetEmailParams {
-  to: string;
-  resetToken: string;
-  resetUrl: string;
+      if (errorMessage.includes('Forbidden')) {
+        throw new Error('SendGrid API key is not authorized. Please verify your API key and sender email settings.');
+      }
+
+      throw new Error(`Failed to send invoice email: ${errorMessage}`);
+    }
+    throw new Error('Failed to send invoice email');
+  }
 }
 
 export async function sendPasswordResetEmail({
@@ -118,24 +134,5 @@ export async function sendPasswordResetEmail({
   } catch (error) {
     console.error('Failed to send password reset email:', error);
     throw error;
-  }
-}
-
-    await sgMail.send(msg);
-    console.log(`Email sent successfully to ${to} for invoice ${invoiceNumber}`);
-    return true;
-  } catch (error) {
-    console.error('Failed to send email:', error);
-    if (error instanceof Error) {
-      const errorMessage = error.message;
-      console.error('SendGrid Error Details:', errorMessage);
-
-      if (errorMessage.includes('Forbidden')) {
-        throw new Error('SendGrid API key is not authorized. Please verify your API key and sender email settings.');
-      }
-
-      throw new Error(`Failed to send invoice email: ${errorMessage}`);
-    }
-    throw new Error('Failed to send invoice email');
   }
 }
