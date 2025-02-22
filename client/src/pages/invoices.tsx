@@ -33,6 +33,7 @@ const ITEMS_PER_PAGE = 10;
 export default function InvoicesPage() {
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
+  const [resendingInvoiceId, setResendingInvoiceId] = useState<number | null>(null);
 
   const { data: invoices, isLoading: isLoadingInvoices } = useQuery<Invoice[]>({
     queryKey: ["/api/invoices"],
@@ -69,12 +70,17 @@ export default function InvoicesPage() {
 
   const resendPaymentLink = useMutation({
     mutationFn: async (invoiceId: number) => {
-      const res = await apiRequest("POST", `/api/invoices/${invoiceId}/resend`);
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Failed to resend invoice');
+      setResendingInvoiceId(invoiceId);
+      try {
+        const res = await apiRequest("POST", `/api/invoices/${invoiceId}/resend`);
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || 'Failed to resend invoice');
+        }
+        return res.json();
+      } finally {
+        setResendingInvoiceId(null);
       }
-      return res.json();
     },
     onSuccess: () => {
       toast({
@@ -155,7 +161,7 @@ export default function InvoicesPage() {
                   return (
                     <TableRow key={invoice.id}>
                       <TableCell>
-                        <Link href={`/create-invoice/${invoice.id}`}>
+                        <Link href={`/invoice/${invoice.id}`}>
                           <span className="text-primary hover:underline cursor-pointer">
                             {invoice.number}
                           </span>
@@ -191,14 +197,14 @@ export default function InvoicesPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => resendPaymentLink.mutate(invoice.id)}
-                                disabled={resendPaymentLink.isPending}
+                                disabled={resendingInvoiceId === invoice.id}
                               >
-                                {resendPaymentLink.isPending ? (
+                                {resendingInvoiceId === invoice.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
                                 ) : (
                                   <Send className="h-4 w-4 mr-1" />
                                 )}
-                                {resendPaymentLink.isPending ? "Sending..." : "Resend"}
+                                {resendingInvoiceId === invoice.id ? "Sending..." : "Resend"}
                               </Button>
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -234,8 +240,8 @@ export default function InvoicesPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  )}
-                )}
+                  );
+                })}
               </TableBody>
             </Table>
 
