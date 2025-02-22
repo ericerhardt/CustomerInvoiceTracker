@@ -27,7 +27,7 @@ export interface IStorage {
   updateInvoiceStatus(id: number, status: string): Promise<Invoice>;
   updateInvoicePayment(id: number, paymentId: string, paymentUrl: string): Promise<Invoice>;
   updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice>;
-  deleteInvoice(id: number): Promise<void>;
+  deleteInvoice(id: number): Promise<void>; // Add this new method
 
   // Invoice items
   createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem>;
@@ -91,8 +91,7 @@ export class DatabaseStorage implements IStorage {
         createdAt: new Date(),
         stripePaymentId: null,
         stripePaymentUrl: null,
-        dueDate: new Date(invoice.dueDate),
-        amount: String(invoice.amount) // Convert number to string for decimal column
+        dueDate: new Date(invoice.dueDate), 
       })
       .returning();
     return newInvoice;
@@ -133,7 +132,7 @@ export class DatabaseStorage implements IStorage {
       .update(invoices)
       .set({
         ...invoice,
-        amount: String(invoice.amount), // Convert number to string for decimal column
+        amount: String(invoice.amount),
         dueDate: new Date(invoice.dueDate),
       })
       .where(eq(invoices.id, id))
@@ -153,8 +152,8 @@ export class DatabaseStorage implements IStorage {
       .insert(invoiceItems)
       .values({
         ...item,
-        quantity: String(item.quantity), // Convert number to string for decimal column
-        unitPrice: String(item.unitPrice), // Convert number to string for decimal column
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice),
       })
       .returning();
     return newItem;
