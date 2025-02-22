@@ -32,7 +32,7 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
   const form = useForm<SenderEmailFormData>({
     resolver: zodResolver(senderEmailSchema),
     defaultValues: {
-      sendGridFromEmail: defaultValue || "",
+      sendGridFromEmail: existingSettings?.sendGridFromEmail || defaultValue || "",
     },
   });
 
@@ -71,7 +71,7 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-h-[60vh] overflow-y-auto">
       <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
         <div className="p-2 bg-primary rounded-full">
           <Mail className="w-6 h-6 text-primary-foreground" />
@@ -121,7 +121,7 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
         </form>
       </Form>
 
-      <div className="text-sm text-muted-foreground">
+      <div className="text-sm text-muted-foreground mt-8 pb-4">
         <p className="font-semibold mb-2">How to verify your sender email:</p>
         <ol className="list-decimal list-inside space-y-2">
           <li>Log in to your SendGrid account</li>
