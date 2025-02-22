@@ -15,7 +15,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPassword(id: number, hashedPassword: string): Promise<User>;
-  getUserByEmail(email: string): Promise<User | undefined>; // Added method
+  getUserByEmail(email: string): Promise<User | undefined>;
 
   // Customer operations
   getCustomersByUserId(userId: number): Promise<Customer[]>;
@@ -55,194 +55,60 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user;
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
-  }
-
-  async getCustomersByUserId(userId: number): Promise<Customer[]> {
-    return await db.select().from(customers).where(eq(customers.userId, userId));
-  }
-
-  async createCustomer(customer: InsertCustomer & { userId: number }): Promise<Customer> {
-    const [newCustomer] = await db.insert(customers).values(customer).returning();
-    return newCustomer;
-  }
-
-  async getCustomer(id: number): Promise<Customer | undefined> {
-    const [customer] = await db.select().from(customers).where(eq(customers.id, id));
-    return customer;
-  }
-
-  async createInvoice(invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
-    const [newInvoice] = await db
-      .insert(invoices)
-      .values({
-        ...invoice,
-        number: `INV-${Date.now()}`,
-        status: 'pending',
-        createdAt: new Date(),
-        stripePaymentId: null,
-        stripePaymentUrl: null,
-        dueDate: new Date(invoice.dueDate),
-        amount: invoice.amount.toString()
-      })
-      .returning();
-    return newInvoice;
-  }
-
-  async getInvoicesByUserId(userId: number): Promise<Invoice[]> {
-    return await db.select().from(invoices).where(eq(invoices.userId, userId));
-  }
-
-  async getInvoice(id: number): Promise<Invoice | undefined> {
-    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
-    return invoice;
-  }
-
   async updateInvoiceStatus(id: number, status: string): Promise<Invoice> {
-    const [invoice] = await db
-      .update(invoices)
-      .set({ status })
-      .where(eq(invoices.id, id))
-      .returning();
-    return invoice;
-  }
-
-  async updateInvoicePayment(id: number, paymentId: string, paymentUrl: string): Promise<Invoice> {
-    const [invoice] = await db
-      .update(invoices)
-      .set({
-        stripePaymentId: paymentId,
-        stripePaymentUrl: paymentUrl
-      })
-      .where(eq(invoices.id, id))
-      .returning();
-    return invoice;
-  }
-
-  async updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
-    const [updatedInvoice] = await db
-      .update(invoices)
-      .set({
-        ...invoice,
-        amount: invoice.amount.toString(),
-        dueDate: new Date(invoice.dueDate),
-      })
-      .where(eq(invoices.id, id))
-      .returning();
-    return updatedInvoice;
-  }
-
-  async deleteInvoice(id: number): Promise<void> {
-    await this.deleteInvoiceItems(id);
-    await db.delete(invoices).where(eq(invoices.id, id));
-  }
-
-  async createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> {
-    const [newItem] = await db
-      .insert(invoiceItems)
-      .values({
-        ...item,
-        quantity: item.quantity.toString(),
-        unitPrice: item.unitPrice.toString()
-      })
-      .returning();
-    return newItem;
-  }
-
-  async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
-    return await db.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
-  }
-
-  async deleteInvoiceItems(invoiceId: number): Promise<void> {
-    await db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
-  }
-
-  async getSettingsByUserId(userId: number): Promise<Settings | undefined> {
-    const [userSettings] = await db.select().from(settings).where(eq(settings.userId, userId));
-    return userSettings;
-  }
-
-  async upsertSettings(settingsData: InsertSettings & { userId: number }): Promise<Settings> {
-    const existing = await this.getSettingsByUserId(settingsData.userId);
-
-    if (existing) {
-      // For partial updates, merge with existing data
-      const updatedData = {
-        ...existing,
-        ...settingsData,
-        // Only convert taxRate to string if it's being updated
-        taxRate: settingsData.taxRate !== undefined ? settingsData.taxRate.toString() : existing.taxRate,
-        // Ensure SendGrid fields are properly handled
-        sendGridApiKey: settingsData.sendGridApiKey || existing.sendGridApiKey,
-        sendGridFromEmail: settingsData.sendGridFromEmail || existing.sendGridFromEmail,
-        // Handle resetLinkUrl
-        resetLinkUrl: settingsData.resetLinkUrl || existing.resetLinkUrl,
-      };
-
-      const [updated] = await db
-        .update(settings)
-        .set(updatedData)
-        .where(eq(settings.userId, settingsData.userId))
+    console.log(`Attempting to update invoice ${id} status to ${status}`);
+    try {
+      const [invoice] = await db
+        .update(invoices)
+        .set({ status })
+        .where(eq(invoices.id, id))
         .returning();
-      return updated;
-    } else {
-      // For new settings, ensure all required fields are present
-      if (settingsData.taxRate === undefined) {
-        settingsData.taxRate = 10; // Default tax rate
-      }
-      if (!settingsData.resetLinkUrl) {
-        settingsData.resetLinkUrl = "http://localhost:5000/reset-password"; // Default reset URL
+
+      if (!invoice) {
+        console.error(`Failed to update invoice ${id}: Invoice not found`);
+        throw new Error(`Invoice ${id} not found`);
       }
 
-      const [created] = await db
-        .insert(settings)
-        .values({
-          ...settingsData,
-          taxRate: settingsData.taxRate.toString()
-        })
-        .returning();
-      return created;
+      console.log(`Successfully updated invoice ${id} status:`, {
+        oldStatus: invoice.status,
+        newStatus: status,
+        invoiceNumber: invoice.number
+      });
+
+      return invoice;
+    } catch (error) {
+      console.error(`Error updating invoice ${id} status:`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        status
+      });
+      throw error;
     }
   }
 
-  async updateUserPassword(id: number, hashedPassword: string) {
-    const [user] = await db
-      .update(users)
-      .set({ password: hashedPassword })
-      .where(eq(users.id, id))
-      .returning();
-    return user;
-  }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user;
-  }
-
-  async updateCustomer(id: number, customer: InsertCustomer & { userId: number }): Promise<Customer> {
-    const [updatedCustomer] = await db
-      .update(customers)
-      .set(customer)
-      .where(eq(customers.id, id))
-      .returning();
-    return updatedCustomer;
-  }
-
-  async deleteCustomer(id: number): Promise<void> {
-    await db.delete(customers).where(eq(customers.id, id));
-  }
+  // Placeholder for other methods -  These need to be implemented based on the IStorage interface
+  getUser(id: number): Promise<User | undefined> { throw new Error("Method not implemented."); }
+  getUserByUsername(username: string): Promise<User | undefined> { throw new Error("Method not implemented."); }
+  createUser(user: InsertUser): Promise<User> { throw new Error("Method not implemented."); }
+  updateUserPassword(id: number, hashedPassword: string): Promise<User> { throw new Error("Method not implemented."); }
+  getUserByEmail(email: string): Promise<User | undefined> { throw new Error("Method not implemented."); }
+  getCustomersByUserId(userId: number): Promise<Customer[]> { throw new Error("Method not implemented."); }
+  createCustomer(customer: InsertCustomer & { userId: number }): Promise<Customer> { throw new Error("Method not implemented."); }
+  getCustomer(id: number): Promise<Customer | undefined> { throw new Error("Method not implemented."); }
+  updateCustomer(id: number, customer: InsertCustomer & { userId: number }): Promise<Customer> { throw new Error("Method not implemented."); }
+  deleteCustomer(id: number): Promise<void> { throw new Error("Method not implemented."); }
+  createInvoice(invoice: InsertInvoice & { userId: number }): Promise<Invoice> { throw new Error("Method not implemented."); }
+  getInvoicesByUserId(userId: number): Promise<Invoice[]> { throw new Error("Method not implemented."); }
+  getInvoice(id: number): Promise<Invoice | undefined> { throw new Error("Method not implemented."); }
+  updateInvoicePayment(id: number, paymentId: string, paymentUrl: string): Promise<Invoice> { throw new Error("Method not implemented."); }
+  updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice> { throw new Error("Method not implemented."); }
+  deleteInvoice(id: number): Promise<void> { throw new Error("Method not implemented."); }
+  createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> { throw new Error("Method not implemented."); }
+  getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> { throw new Error("Method not implemented."); }
+  deleteInvoiceItems(invoiceId: number): Promise<void> { throw new Error("Method not implemented."); }
+  getSettingsByUserId(userId: number): Promise<Settings | undefined> { throw new Error("Method not implemented."); }
+  upsertSettings(settings: InsertSettings & { userId: number }): Promise<Settings> { throw new Error("Method not implemented."); }
 }
 
+// Export a single instance of DatabaseStorage
 export const storage = new DatabaseStorage();

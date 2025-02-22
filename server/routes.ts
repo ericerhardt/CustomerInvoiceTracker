@@ -370,8 +370,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/webhook", async (req, res) => {
     const sig = req.headers['stripe-signature'];
+    console.log('Received Stripe webhook request:', {
+      method: req.method,
+      path: req.path,
+      signature: sig ? 'Present' : 'Missing',
+    });
 
     if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+      console.error('Webhook signature or secret missing', {
+        signature: sig ? 'Present' : 'Missing',
+        secret: process.env.STRIPE_WEBHOOK_SECRET ? 'Present' : 'Missing'
+      });
       return res.status(400).send('Webhook signature or secret missing');
     }
 
@@ -381,44 +390,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
         apiVersion: '2022-11-15',
       });
 
+      console.log('Validating webhook signature...');
       const event = stripeInstance.webhooks.constructEvent(
         req.body,
         sig,
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
-      console.log('Received Stripe webhook event:', event.type);
+      console.log('Webhook event validated:', {
+        type: event.type,
+        id: event.id,
+        created: new Date(event.created * 1000).toISOString()
+      });
 
       // Handle payment_intent events
       switch (event.type) {
         case 'payment_intent.succeeded': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
-          console.log('Payment succeeded:', paymentIntent.id);
+          console.log('Processing successful payment:', {
+            paymentIntentId: paymentIntent.id,
+            amount: paymentIntent.amount,
+            currency: paymentIntent.currency,
+            status: paymentIntent.status,
+            metadata: paymentIntent.metadata
+          });
 
           const invoiceId = paymentIntent.metadata?.invoiceId;
           if (invoiceId) {
+            console.log(`Updating invoice ${invoiceId} status to paid`);
             await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-            console.log(`Updated invoice ${invoiceId} status to paid`);
+            console.log(`Successfully updated invoice ${invoiceId} status to paid`);
+          } else {
+            console.warn('No invoiceId found in payment intent metadata', {
+              paymentIntentId: paymentIntent.id
+            });
           }
           break;
         }
         case 'payment_intent.payment_failed': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
-          console.log('Payment failed:', paymentIntent.id);
+          console.log('Processing failed payment:', {
+            paymentIntentId: paymentIntent.id,
+            amount: paymentIntent.amount,
+            currency: paymentIntent.currency,
+            status: paymentIntent.status,
+            metadata: paymentIntent.metadata,
+            errorMessage: paymentIntent.last_payment_error?.message
+          });
 
           const invoiceId = paymentIntent.metadata?.invoiceId;
           if (invoiceId) {
+            console.log(`Updating invoice ${invoiceId} status to failed`);
             await storage.updateInvoiceStatus(parseInt(invoiceId), 'failed');
-            console.log(`Updated invoice ${invoiceId} status to failed`);
+            console.log(`Successfully updated invoice ${invoiceId} status to failed`);
+          } else {
+            console.warn('No invoiceId found in payment intent metadata', {
+              paymentIntentId: paymentIntent.id
+            });
           }
           break;
         }
+        default: {
+          console.log('Unhandled event type:', event.type);
+        }
       }
 
+      console.log('Webhook processing completed successfully');
       res.json({ received: true });
     } catch (err) {
       const error = err as Error;
-      console.error('Webhook Error:', error.message);
+      console.error('Webhook Error:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       return res.status(400).send(`Webhook Error: ${error.message}`);
     }
   });
