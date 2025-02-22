@@ -98,10 +98,12 @@ export function setupAuth(app: Express) {
 
   app.post("/api/reset-password", async (req, res) => {
     try {
+      console.log('Processing password reset request for email:', req.body.email);
       const { email } = req.body;
       const user = await storage.getUserByUsername(email);
 
       if (user) {
+        console.log('User found, generating reset token...');
         const resetToken = randomBytes(32).toString('hex');
         const resetUrl = `${process.env.APP_URL || 'http://localhost:5000'}/reset-password`;
 
@@ -111,22 +113,36 @@ export function setupAuth(app: Express) {
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
         };
 
+        console.log('Storing reset token in session store...');
         await storage.sessionStore.set(`pwreset_${resetToken}`, JSON.stringify(tokenData));
 
-        await sendPasswordResetEmail({
-          to: email,
-          resetToken,
-          resetUrl
-        });
-
-        res.json({ message: 'Password reset email sent' });
+        console.log('Attempting to send password reset email...');
+        try {
+          await sendPasswordResetEmail({
+            to: email,
+            resetToken,
+            resetUrl
+          });
+          console.log('Password reset email sent successfully');
+          res.json({ message: 'Password reset email sent' });
+        } catch (emailError) {
+          console.error('Failed to send password reset email:', emailError);
+          res.status(500).json({ 
+            message: 'Failed to send password reset email',
+            error: emailError instanceof Error ? emailError.message : 'Unknown error'
+          });
+        }
       } else {
+        console.log('No user found for email:', email);
         // Return success even if user not found for security
         res.json({ message: 'If an account exists, a reset email will be sent' });
       }
     } catch (error) {
       console.error('Password reset error:', error);
-      res.status(500).json({ message: 'Failed to process password reset' });
+      res.status(500).json({ 
+        message: 'Failed to process password reset',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

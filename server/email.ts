@@ -101,13 +101,20 @@ export async function sendPasswordResetEmail({
       throw new Error('SendGrid API key is not configured');
     }
 
+    if (!process.env.SENDGRID_FROM_EMAIL) {
+      throw new Error('SendGrid sender email is not configured');
+    }
+
+    console.log('Configuring SendGrid with API key...');
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    console.log('SendGrid API key configured');
+
+    const senderEmail = process.env.SENDGRID_FROM_EMAIL;
+    console.log('Using sender email:', senderEmail);
 
     const msg = {
       to,
       from: {
-        email: process.env.SENDGRID_FROM_EMAIL || 'noreply@invoicegenerator.com',
+        email: senderEmail,
         name: 'Invoice System Password Reset'
       },
       subject: 'Password Reset Request',
@@ -128,18 +135,41 @@ export async function sendPasswordResetEmail({
       `,
     };
 
-    console.log('Attempting to send password reset email to:', to);
+    console.log('Attempting to send password reset email...');
+    console.log('Email configuration:', {
+      to,
+      from: msg.from.email,
+      subject: msg.subject
+    });
+
     const [response] = await sgMail.send(msg);
-    console.log('SendGrid API Response:', response.statusCode, response.headers);
-    console.log('Password reset email sent successfully to:', to);
-    return true;
+    console.log('SendGrid API Response:', {
+      statusCode: response.statusCode,
+      headers: response.headers,
+      body: response.body
+    });
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      console.log('Password reset email sent successfully');
+      return true;
+    } else {
+      throw new Error(`Unexpected status code: ${response.statusCode}`);
+    }
   } catch (error) {
     console.error('Failed to send password reset email:', error);
     if (error instanceof Error) {
       console.error('SendGrid Error Details:', error.message);
+
       if (error.message.includes('The from address does not match a verified Sender Identity')) {
-        throw new Error('Email sender not verified with SendGrid. Please verify your sender email in SendGrid dashboard.');
+        throw new Error(`Email sender ${process.env.SENDGRID_FROM_EMAIL} not verified with SendGrid. Please verify your sender email in SendGrid dashboard.`);
       }
+      if (error.message.includes('Invalid API key')) {
+        throw new Error('Invalid SendGrid API key. Please check your configuration.');
+      }
+      if (error.message.includes('forbidden')) {
+        throw new Error('SendGrid API key does not have permission to send emails. Please check your API key permissions.');
+      }
+
       throw error;
     }
     throw new Error('Failed to send password reset email');
