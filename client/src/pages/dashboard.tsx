@@ -49,7 +49,12 @@ export default function Dashboard() {
         const error = await res.json();
         throw new Error(error.message || 'Failed to delete invoice');
       }
-      return res.json();
+      // Don't try to parse JSON for 204 response
+      if (res.status !== 204) {
+        return res.json();
+      }
+      // Return undefined for 204 response
+      return undefined;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
