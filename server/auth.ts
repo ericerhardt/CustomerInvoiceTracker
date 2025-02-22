@@ -126,7 +126,8 @@ export function setupAuth(app: Express) {
           await sendPasswordResetEmail({
             to: email,
             resetToken,
-            resetUrl
+            resetUrl,
+            userId: user.id
           });
           console.log('Password reset email sent successfully');
           res.json({ message: 'Password reset email sent' });

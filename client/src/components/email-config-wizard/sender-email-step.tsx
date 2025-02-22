@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 const senderEmailSchema = z.object({
-  senderEmail: z.string().email("Please enter a valid email address"),
+  sendGridFromEmail: z.string().email("Please enter a valid email address"),
 });
 
 type SenderEmailFormData = z.infer<typeof senderEmailSchema>;
@@ -27,14 +27,14 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
   const form = useForm<SenderEmailFormData>({
     resolver: zodResolver(senderEmailSchema),
     defaultValues: {
-      senderEmail: defaultValue || "",
+      sendGridFromEmail: defaultValue || "",
     },
   });
 
   const saveSenderEmail = useMutation({
     mutationFn: async (data: SenderEmailFormData) => {
       const res = await apiRequest("POST", "/api/settings", {
-        senderEmail: data.senderEmail,
+        sendGridFromEmail: data.sendGridFromEmail,
       });
       if (!res.ok) {
         const error = await res.json();
@@ -65,7 +65,7 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
           <Mail className="w-6 h-6 text-primary-foreground" />
         </div>
         <div>
-          <h4 className="font-semibold">Sender Email Address</h4>
+          <h4 className="font-semibold">SendGrid Sender Email Address</h4>
           <p className="text-sm text-muted-foreground">
             This email address must be verified in your SendGrid account
           </p>
@@ -76,7 +76,7 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
         <form onSubmit={form.handleSubmit((data) => saveSenderEmail.mutate(data))} className="space-y-4">
           <FormField
             control={form.control}
-            name="senderEmail"
+            name="sendGridFromEmail"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Sender Email</FormLabel>
@@ -92,22 +92,20 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
             )}
           />
 
-          <div className="space-y-2">
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={saveSenderEmail.isPending}
-            >
-              {saveSenderEmail.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Sender Email"
-              )}
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={saveSenderEmail.isPending}
+          >
+            {saveSenderEmail.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Save Sender Email"
+            )}
+          </Button>
         </form>
       </Form>
 

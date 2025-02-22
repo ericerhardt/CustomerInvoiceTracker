@@ -95,6 +95,7 @@ export const settings = pgTable("settings", {
   stripeSecretKey: text("stripe_secret_key").notNull(),
   stripePublicKey: text("stripe_public_key").notNull(),
   sendGridApiKey: text("sendgrid_api_key").notNull(),
+  sendGridFromEmail: text("sendgrid_from_email").notNull(),
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default('10'),
 });
 
@@ -106,6 +107,7 @@ export const insertSettingsSchema = createInsertSchema(settings)
     stripeSecretKey: true,
     stripePublicKey: true,
     sendGridApiKey: true,
+    sendGridFromEmail: true,
     taxRate: true,
   })
   .extend({
