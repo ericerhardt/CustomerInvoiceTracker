@@ -89,14 +89,12 @@ export function setupAuth(app: Express) {
       res.sendStatus(200);
     });
   });
+}
 
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     res.json(req.user);
   });
-}
-
-
 
   app.post("/api/reset-password", async (req, res) => {
     try {
