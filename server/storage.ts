@@ -181,7 +181,10 @@ export class DatabaseStorage implements IStorage {
         ...existing,
         ...settingsData,
         // Only convert taxRate to string if it's being updated
-        taxRate: settingsData.taxRate !== undefined ? settingsData.taxRate.toString() : existing.taxRate
+        taxRate: settingsData.taxRate !== undefined ? settingsData.taxRate.toString() : existing.taxRate,
+        // Ensure SendGrid fields are properly handled
+        sendGridApiKey: settingsData.sendGridApiKey || existing.sendGridApiKey,
+        sendGridFromEmail: settingsData.sendGridFromEmail || existing.sendGridFromEmail,
       };
 
       const [updated] = await db

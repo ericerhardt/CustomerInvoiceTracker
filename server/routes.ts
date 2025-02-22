@@ -432,6 +432,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) return res.sendStatus(401);
 
     try {
+      console.log('Received settings update request:', {
+        body: req.body,
+        userId: req.user.id
+      });
+
       // Basic format validation only
       if (req.body.sendGridApiKey && !req.body.sendGridApiKey.startsWith('SG.')) {
         throw new Error('Invalid SendGrid API key format. Must start with "SG."');
@@ -447,12 +452,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user.id,
       });
 
+      console.log('Settings updated successfully:', {
+        userId: req.user.id,
+        updatedFields: Object.keys(req.body)
+      });
+
       res.json(settings);
     } catch (error) {
       console.error('Failed to update settings:', error);
       res.status(500).json({
         message: 'Failed to update settings',
-        error: (error as Error).message
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });

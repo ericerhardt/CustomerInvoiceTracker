@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,11 @@ interface SenderEmailStepProps {
 export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepProps) {
   const { toast } = useToast();
 
+  // Get existing settings first
+  const { data: existingSettings, isError: isExistingSettingsError, error: existingSettingsError } = useQuery({
+    queryKey: ["/api/settings"],
+  });
+
   const form = useForm<SenderEmailFormData>({
     resolver: zodResolver(senderEmailSchema),
     defaultValues: {
@@ -33,9 +38,15 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
 
   const saveSenderEmail = useMutation({
     mutationFn: async (data: SenderEmailFormData) => {
-      const res = await apiRequest("POST", "/api/settings", {
+      console.log('Sending email settings update:', data);
+
+      // Merge with existing settings to prevent overwriting
+      const updateData = {
+        ...(existingSettings || {}), // Handle potential null value
         sendGridFromEmail: data.sendGridFromEmail,
-      });
+      };
+
+      const res = await apiRequest("POST", "/api/settings", updateData);
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.message || "Failed to save sender email");
@@ -50,9 +61,10 @@ export function SenderEmailStep({ onComplete, defaultValue }: SenderEmailStepPro
       onComplete();
     },
     onError: (error: Error) => {
+      console.error('Failed to save sender email:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "An unknown error occurred.", //Added default error message
         variant: "destructive",
       });
     },
