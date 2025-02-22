@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FileText, Home, LogOut, Settings, User } from "lucide-react";
+import { FileText, Home, LogOut, Settings, User, Users } from "lucide-react";
 
 export function Navigation() {
   const { user, logoutMutation } = useAuth();
@@ -49,6 +49,18 @@ export function Navigation() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <Link href="/customers">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <Users className="mr-2 h-4 w-4" />
+                    <span>Manage Customers</span>
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/invoices">
+                  <DropdownMenuItem className="cursor-pointer">
+                    <FileText className="mr-2 h-4 w-4" />
+                    <span>Manage Invoices</span>
+                  </DropdownMenuItem>
+                </Link>
                 <Link href="/settings">
                   <DropdownMenuItem className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
