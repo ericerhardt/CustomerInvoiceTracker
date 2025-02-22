@@ -74,7 +74,9 @@ export async function sendInvoiceEmail({
       ] : undefined,
     };
 
-    await sgMail.send(msg);
+    console.log('Attempting to send email...', { to, invoiceNumber });
+    const result = await sgMail.send(msg);
+    console.log('SendGrid API Response:', result);
     console.log(`Email sent successfully to ${to} for invoice ${invoiceNumber}`);
     return true;
   } catch (error) {
