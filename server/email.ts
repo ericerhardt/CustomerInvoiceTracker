@@ -8,14 +8,14 @@ interface SendInvoiceEmailParams {
   dueDate: Date;
   paymentUrl: string;
   pdfBuffer?: Buffer;
-  userId: number; // Add userId parameter
+  userId: number;
 }
 
 interface SendPasswordResetEmailParams {
   to: string;
   resetToken: string;
   resetUrl: string;
-  userId: number; // Add userId parameter
+  userId: number;
 }
 
 export async function sendInvoiceEmail({
@@ -37,30 +37,33 @@ export async function sendInvoiceEmail({
   }).format(new Date(dueDate));
 
   try {
+    // Try to get settings from database first
     const settings = await storage.getSettingsByUserId(userId);
-    if (!settings) {
-      throw new Error('Email settings not configured. Please configure your SendGrid settings in the Settings page.');
+
+    // Determine API key and sender email with fallback to environment variables
+    const apiKey = settings?.sendGridApiKey || process.env.SENDGRID_API_KEY;
+    const fromEmail = settings?.sendGridFromEmail || process.env.SENDGRID_FROM_EMAIL;
+    const companyName = settings?.companyName || 'Invoice System';
+
+    if (!apiKey) {
+      throw new Error('SendGrid API key not configured. Please configure your SendGrid settings in the Settings page or set SENDGRID_API_KEY environment variable.');
     }
 
-    if (!settings.sendGridApiKey) {
-      throw new Error('SendGrid API key not configured');
+    if (!fromEmail) {
+      throw new Error('SendGrid sender email not configured. Please configure your sender email in the Settings page or set SENDGRID_FROM_EMAIL environment variable.');
     }
 
-    if (!settings.sendGridFromEmail) {
-      throw new Error('SendGrid sender email not configured');
-    }
-
-    if (!settings.sendGridApiKey.startsWith('SG.')) {
+    if (!apiKey.startsWith('SG.')) {
       throw new Error('Invalid SendGrid API key format. Must start with "SG."');
     }
 
-    sgMail.setApiKey(settings.sendGridApiKey);
+    sgMail.setApiKey(apiKey);
 
     const msg = {
       to,
       from: {
-        email: settings.sendGridFromEmail,
-        name: settings.companyName || 'Invoice System'
+        email: fromEmail,
+        name: companyName
       },
       subject: `Invoice ${invoiceNumber} - Payment Required`,
       text: `Amount due: ${formattedAmount}\nDue date: ${formattedDate}\nPay now: ${paymentUrl}`,
@@ -119,32 +122,34 @@ export async function sendPasswordResetEmail({
   try {
     console.log('Starting password reset email process for:', to);
 
+    // Try to get settings from database first
     const settings = await storage.getSettingsByUserId(userId);
-    if (!settings) {
-      throw new Error('Email settings not configured. Please configure your SendGrid settings in the Settings page.');
+
+    // Determine API key and sender email with fallback to environment variables
+    const apiKey = settings?.sendGridApiKey || process.env.SENDGRID_API_KEY;
+    const fromEmail = settings?.sendGridFromEmail || process.env.SENDGRID_FROM_EMAIL;
+
+    if (!apiKey) {
+      throw new Error('SendGrid API key not configured. Please configure your SendGrid settings in the Settings page or set SENDGRID_API_KEY environment variable.');
     }
 
-    if (!settings.sendGridApiKey) {
-      throw new Error('SendGrid API key not configured');
+    if (!fromEmail) {
+      throw new Error('SendGrid sender email not configured. Please configure your sender email in the Settings page or set SENDGRID_FROM_EMAIL environment variable.');
     }
 
-    if (!settings.sendGridFromEmail) {
-      throw new Error('SendGrid sender email not configured');
-    }
-
-    if (!settings.sendGridApiKey.startsWith('SG.')) {
+    if (!apiKey.startsWith('SG.')) {
       throw new Error('Invalid SendGrid API key format. Must start with "SG."');
     }
 
     console.log('Configuring SendGrid with API key...');
-    sgMail.setApiKey(settings.sendGridApiKey);
+    sgMail.setApiKey(apiKey);
 
-    console.log('Using sender email:', settings.sendGridFromEmail);
+    console.log('Using sender email:', fromEmail);
 
     const msg = {
       to,
       from: {
-        email: settings.sendGridFromEmail,
+        email: fromEmail,
         name: 'Invoice System Password Reset'
       },
       subject: 'Password Reset Request',
