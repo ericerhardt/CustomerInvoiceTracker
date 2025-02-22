@@ -148,6 +148,7 @@ export class DatabaseStorage implements IStorage {
     const [newInvoice] = await db.insert(invoices).values({
       ...invoice,
       amount: invoice.amount.toString(), // Convert number to string for database
+      dueDate: new Date(invoice.dueDate), // Ensure dueDate is a Date object
       createdAt: new Date(),
       stripePaymentId: null,
       stripePaymentUrl: null
