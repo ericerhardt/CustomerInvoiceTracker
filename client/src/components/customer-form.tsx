@@ -1,7 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { insertCustomerSchema, type InsertCustomer } from "@shared/schema";
+import { insertCustomerSchema, type InsertCustomer, type Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -16,18 +16,19 @@ import {
 import { Input } from "@/components/ui/input";
 
 interface CustomerFormProps {
+  customer?: Customer;
   onSuccess?: () => void;
 }
 
-export function CustomerForm({ onSuccess }: CustomerFormProps) {
+export function CustomerForm({ customer, onSuccess }: CustomerFormProps) {
   const { toast } = useToast();
   const form = useForm<InsertCustomer>({
     resolver: zodResolver(insertCustomerSchema),
     defaultValues: {
-      name: "",
-      email: "",
-      address: "",
-      phone: "",
+      name: customer?.name || "",
+      email: customer?.email || "",
+      address: customer?.address || "",
+      phone: customer?.phone || "",
     },
   });
 
@@ -54,9 +55,42 @@ export function CustomerForm({ onSuccess }: CustomerFormProps) {
     },
   });
 
+  const updateCustomer = useMutation({
+    mutationFn: async (data: InsertCustomer) => {
+      const res = await apiRequest("PATCH", `/api/customers/${customer?.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      toast({
+        title: "Success",
+        description: "Customer updated successfully",
+      });
+      form.reset();
+      onSuccess?.();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const onSubmit = (data: InsertCustomer) => {
+    if (customer) {
+      updateCustomer.mutate(data);
+    } else {
+      createCustomer.mutate(data);
+    }
+  };
+
+  const isLoading = createCustomer.isPending || updateCustomer.isPending;
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((data) => createCustomer.mutate(data))} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -113,8 +147,10 @@ export function CustomerForm({ onSuccess }: CustomerFormProps) {
           )}
         />
 
-        <Button type="submit" className="w-full" disabled={createCustomer.isPending}>
-          {createCustomer.isPending ? "Creating..." : "Create Customer"}
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading 
+            ? (customer ? "Updating..." : "Creating...") 
+            : (customer ? "Update Customer" : "Create Customer")}
         </Button>
       </form>
     </Form>

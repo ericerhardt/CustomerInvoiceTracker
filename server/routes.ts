@@ -48,6 +48,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(customer);
   });
 
+  app.patch("/api/customers/:id", async (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+    try {
+      const customer = await storage.getCustomer(parseInt(req.params.id));
+      if (!customer) return res.sendStatus(404);
+      if (customer.userId !== req.user.id) return res.sendStatus(403);
+
+      const updatedCustomer = await storage.updateCustomer(customer.id, {
+        ...req.body,
+        userId: req.user.id,
+      });
+      res.json(updatedCustomer);
+    } catch (error) {
+      console.error('Failed to update customer:', error);
+      res.status(500).json({
+        message: 'Failed to update customer',
+        error: (error as Error).message
+      });
+    }
+  });
+
+  app.delete("/api/customers/:id", async (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+    try {
+      const customer = await storage.getCustomer(parseInt(req.params.id));
+      if (!customer) return res.sendStatus(404);
+      if (customer.userId !== req.user.id) return res.sendStatus(403);
+
+      await storage.deleteCustomer(customer.id);
+      res.sendStatus(204);
+    } catch (error) {
+      console.error('Failed to delete customer:', error);
+      res.status(500).json({
+        message: 'Failed to delete customer',
+        error: (error as Error).message
+      });
+    }
+  });
+
   // Invoices
   app.get("/api/invoices", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
