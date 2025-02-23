@@ -2,7 +2,6 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { sendInvoiceEmail } from "./email";
 import Stripe from "stripe";
 import { renderToBuffer } from '@react-pdf/renderer';
 import React from 'react';
@@ -36,33 +35,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create a separate router for the webhook endpoint
   const webhookRouter = express.Router();
+
+  // Configure raw body handling specifically for webhook route
   webhookRouter.use(express.raw({ type: 'application/json' }));
 
   webhookRouter.post("/", async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-
-    // Enhanced logging
-    console.log('Webhook request details:', {
-      method: req.method,
-      path: req.path,
-      signature: sig ? 'Present' : 'Missing',
-      bodyType: typeof req.body,
-      isBuffer: Buffer.isBuffer(req.body),
-      bodyLength: req.body ? req.body.length : 0,
-      contentType: req.headers['content-type'],
-      rawBody: req.body ? req.body.toString('hex').slice(0, 20) + '...' : 'No body'
-    });
-
-    if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
-      console.error('Missing webhook requirements:', {
-        signature: !!sig,
-        secret: !!process.env.STRIPE_WEBHOOK_SECRET
-      });
-      return res.status(400).send('Webhook signature or secret missing');
-    }
-
-    let event;
     try {
+      const sig = req.headers['stripe-signature'];
+
+      // Enhanced logging for webhook details
+      console.log('Webhook request received:', {
+        method: req.method,
+        path: req.path,
+        headers: {
+          'content-type': req.headers['content-type'],
+          'stripe-signature': sig ? 'Present' : 'Missing'
+        },
+        bodyType: typeof req.body,
+        isBuffer: Buffer.isBuffer(req.body),
+        bodyLength: req.body ? req.body.length : 0,
+        bodyPreview: req.body ? req.body.toString('hex').slice(0, 50) + '...' : 'No body'
+      });
+
+      if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+        console.error('Missing webhook requirements:', {
+          signature: !!sig,
+          secret: !!process.env.STRIPE_WEBHOOK_SECRET
+        });
+        return res.status(400).send('Webhook signature or secret missing');
+      }
+
+      if (!Buffer.isBuffer(req.body)) {
+        console.error('Received non-buffer payload:', {
+          type: typeof req.body,
+          preview: JSON.stringify(req.body).slice(0, 100)
+        });
+        return res.status(400).send('Invalid payload format');
+      }
+
       // Get settings from first user (webhook doesn't have user context)
       const [firstUser] = await db.select().from(users).limit(1);
       if (!firstUser) {
@@ -71,18 +81,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const stripeInstance = await getStripe(firstUser.id);
 
-      // Verify webhook signature
-      console.log('Attempting webhook signature verification...');
-      event = stripeInstance.webhooks.constructEvent(
-        req.body,
-        sig,
-        process.env.STRIPE_WEBHOOK_SECRET
-      );
+      let event;
+      try {
+        event = stripeInstance.webhooks.constructEvent(
+          req.body,
+          sig,
+          process.env.STRIPE_WEBHOOK_SECRET
+        );
 
-      console.log('Webhook event successfully constructed:', {
-        type: event.type,
-        id: event.id
-      });
+        console.log('Successfully constructed webhook event:', {
+          type: event.type,
+          id: event.id
+        });
+      } catch (err) {
+        console.error('Failed to construct webhook event:', {
+          error: err instanceof Error ? err.message : 'Unknown error',
+          signatureHeader: sig,
+          bodyLength: req.body.length,
+          bodyPreview: req.body.toString().slice(0, 100)
+        });
+        return res.status(400).send(`Webhook signature verification failed`);
+      }
 
       // Handle the event
       switch (event.type) {
@@ -114,16 +133,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Webhook processing failed:', {
         error: error.message,
         stack: error.stack,
-        name: error.name
+        name: error.name,
+        body: req.body ? req.body.toString('hex').slice(0, 100) : 'No body'
       });
       return res.status(400).send(`Webhook Error: ${error.message}`);
     }
   });
 
-  // Mount webhook router before any other middleware
+  // Mount webhook router before ANY other middleware or route
   app.use('/webhook', webhookRouter);
 
-  // Setup auth and other middleware after webhook route
+  // Setup auth and other middleware AFTER webhook route
   setupAuth(app);
 
   // Customers
@@ -580,4 +600,8 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
     console.error('Failed to generate PDF:', error);
     return undefined;
   }
+}
+
+async function sendInvoiceEmail(options: any) {
+    //Implementation for sending email
 }
