@@ -34,104 +34,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return stripe;
   }
 
-  // Configure webhook route with raw body handling
-  const webhookMiddleware = express.raw({ type: 'application/json' });
-  app.post("/webhook", webhookMiddleware, async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    console.log('Received Stripe webhook request:', {
-      method: req.method,
-      path: req.path,
-      signature: sig ? 'Present' : 'Missing',
-      body: req.body ? 'Present' : 'Missing',
-      bodyType: typeof req.body,
-      isBuffer: Buffer.isBuffer(req.body)
-    });
+  // Configure webhook endpoint before any other middleware
+  const webhookPath = '/webhook';
+  app.post(
+    webhookPath,
+    express.raw({ type: 'application/json' }), // This must be before any other body parsers
+    async (req, res) => {
+      const sig = req.headers['stripe-signature'];
 
-    if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
-      console.error('Webhook signature or secret missing', {
+      // Enhanced logging
+      console.log('Webhook request details:', {
+        method: req.method,
+        path: req.path,
         signature: sig ? 'Present' : 'Missing',
-        secret: process.env.STRIPE_WEBHOOK_SECRET ? 'Present' : 'Missing'
+        bodyType: typeof req.body,
+        isBuffer: Buffer.isBuffer(req.body),
+        bodyLength: req.body ? req.body.length : 0,
+        contentType: req.headers['content-type']
       });
-      return res.status(400).send('Webhook signature or secret missing');
-    }
 
-    let event;
-    try {
-      // Get settings from first user (webhook doesn't have user context)
-      const [firstUser] = await db.select().from(users).limit(1);
-      if (!firstUser) {
-        throw new Error('No users found to get Stripe settings');
+      if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+        console.error('Missing webhook requirements:', {
+          signature: !!sig,
+          secret: !!process.env.STRIPE_WEBHOOK_SECRET
+        });
+        return res.status(400).send('Webhook signature or secret missing');
       }
 
-      const stripeInstance = await getStripe(firstUser.id);
+      let event;
+      try {
+        // Get settings from first user (webhook doesn't have user context)
+        const [firstUser] = await db.select().from(users).limit(1);
+        if (!firstUser) {
+          throw new Error('No users found to get Stripe settings');
+        }
 
-      console.log('Validating webhook signature...');
-      event = stripeInstance.webhooks.constructEvent(
-        req.body,
-        sig,
-        process.env.STRIPE_WEBHOOK_SECRET
-      );
+        const stripeInstance = await getStripe(firstUser.id);
 
-      console.log('Webhook event validated:', {
-        type: event.type,
-        id: event.id,
-        created: new Date(event.created * 1000).toISOString()
-      });
+        // Verify webhook signature
+        console.log('Attempting webhook signature verification...');
+        event = stripeInstance.webhooks.constructEvent(
+          req.body,
+          sig,
+          process.env.STRIPE_WEBHOOK_SECRET
+        );
 
-      // Handle payment events
-      switch (event.type) {
-        case 'checkout.session.completed': {
-          const session = event.data.object as Stripe.Checkout.Session;
-          console.log('Processing completed checkout session:', {
-            sessionId: session.id,
-            metadata: session.metadata
-          });
+        console.log('Webhook event successfully constructed:', {
+          type: event.type,
+          id: event.id
+        });
 
-          const invoiceId = session.metadata?.invoiceId;
-          if (invoiceId) {
-            console.log(`Updating invoice ${invoiceId} status to paid`);
-            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-            console.log(`Successfully updated invoice ${invoiceId} status to paid`);
+        // Handle the event
+        switch (event.type) {
+          case 'checkout.session.completed': {
+            const session = event.data.object as Stripe.Checkout.Session;
+            const invoiceId = session.metadata?.invoiceId;
+            if (invoiceId) {
+              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Updated invoice ${invoiceId} status to paid`);
+            }
+            break;
           }
-          break;
-        }
-        case 'payment_intent.succeeded': {
-          const paymentIntent = event.data.object as Stripe.PaymentIntent;
-          console.log('Processing successful payment:', {
-            paymentIntentId: paymentIntent.id,
-            amount: paymentIntent.amount,
-            currency: paymentIntent.currency,
-            status: paymentIntent.status,
-            metadata: paymentIntent.metadata
-          });
-
-          const invoiceId = paymentIntent.metadata?.invoiceId;
-          if (invoiceId) {
-            console.log(`Updating invoice ${invoiceId} status to paid`);
-            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-            console.log(`Successfully updated invoice ${invoiceId} status to paid`);
+          case 'payment_intent.succeeded': {
+            const paymentIntent = event.data.object as Stripe.PaymentIntent;
+            const invoiceId = paymentIntent.metadata?.invoiceId;
+            if (invoiceId) {
+              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Updated invoice ${invoiceId} status to paid`);
+            }
+            break;
           }
-          break;
+          default:
+            console.log(`Unhandled event type: ${event.type}`);
         }
-        default: {
-          console.log('Unhandled event type:', event.type);
-        }
+
+        res.json({ received: true });
+      } catch (err) {
+        const error = err as Error;
+        console.error('Webhook processing failed:', {
+          error: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        return res.status(400).send(`Webhook Error: ${error.message}`);
       }
-
-      console.log('Webhook processing completed successfully');
-      res.json({ received: true });
-    } catch (err) {
-      const error = err as Error;
-      console.error('Webhook Error:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-      return res.status(400).send(`Webhook Error: ${error.message}`);
     }
-  });
+  );
 
-  // Setup auth after webhook route
+  // Setup auth and other middleware after webhook route
   setupAuth(app);
 
   // Customers
