@@ -66,10 +66,32 @@ export function setupAuth(app: Express) {
         return res.status(400).send("Username already exists");
       }
 
+      // Create the user
       const user = await storage.createUser({
         ...req.body,
         password: await hashPassword(req.body.password),
       });
+
+      // Create default settings for the new user
+      try {
+        await storage.upsertSettings({
+          userId: user.id,
+          companyName: '',
+          companyAddress: '',
+          companyEmail: '',
+          stripeSecretKey: '',
+          stripePublicKey: '',
+          stripeWebhookSecret: null,
+          sendGridApiKey: '',
+          sendGridFromEmail: '',
+          resetLinkUrl: `http://localhost:5000/reset-password`,
+          taxRate: 10,
+        });
+        console.log('Created default settings for new user:', user.id);
+      } catch (settingsError) {
+        console.error('Failed to create default settings:', settingsError);
+        // Continue with registration even if settings creation fails
+      }
 
       req.login(user, (err) => {
         if (err) return next(err);

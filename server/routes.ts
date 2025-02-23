@@ -3,7 +3,6 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import Stripe from "stripe";
-import { renderToBuffer } from '@react-pdf/renderer';
 import React from 'react';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
 import type { InvoiceItem } from "@shared/schema";
@@ -605,18 +604,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user.id
       });
 
-      // Basic format validation only
-      if (req.body.sendGridApiKey && !req.body.sendGridApiKey.startsWith('SG.')) {
+      // Get existing settings first
+      const existingSettings = await storage.getSettingsByUserId(req.user.id);
+
+      // Merge existing settings with new settings
+      const updatedSettings = {
+        ...existingSettings,
+        ...req.body,
+        userId: req.user.id,
+      };
+
+      // Basic format validation
+      if (updatedSettings.sendGridApiKey && !updatedSettings.sendGridApiKey.startsWith('SG.')) {
         throw new Error('Invalid SendGrid API key format. Must start with "SG."');
       }
 
       // Validate Stripe key format if provided
-      if (req.body.stripeSecretKey && !req.body.stripeSecretKey.startsWith('sk_')) {
+      if (updatedSettings.stripeSecretKey && !updatedSettings.stripeSecretKey.startsWith('sk_')) {
         throw new Error('Invalid Stripe secret key format. Must start with "sk_"');
       }
 
+      // Ensure all required fields are present
       const settings = await storage.upsertSettings({
-        ...req.body,
+        companyName: updatedSettings.companyName || '',
+        companyAddress: updatedSettings.companyAddress || '',
+        companyEmail: updatedSettings.companyEmail || '',
+        stripeSecretKey: updatedSettings.stripeSecretKey || '',
+        stripePublicKey: updatedSettings.stripePublicKey || '',
+        stripeWebhookSecret: updatedSettings.stripeWebhookSecret || null,
+        sendGridApiKey: updatedSettings.sendGridApiKey || '',
+        sendGridFromEmail: updatedSettings.sendGridFromEmail || '',
+        resetLinkUrl: updatedSettings.resetLinkUrl || 'http://localhost:5000/reset-password',
+        taxRate: updatedSettings.taxRate || '10.00',
         userId: req.user.id,
       });
 
@@ -642,7 +661,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Helper function for generating PDF
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
   try {
-    const pdfDocument = React.createElement(InvoicePDF, {
+    const pdfComponent = React.createElement(InvoicePDF, {
       items: items.map(item => ({
         description: item.description,
         quantity: Number(item.quantity),
@@ -655,11 +674,21 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
         companyName: settings.companyName || '',
         companyAddress: settings.companyAddress || '',
         companyEmail: settings.companyEmail || '',
-        taxRate: Number(settings.taxRate),
+        taxRate: Number(settings.taxRate) || 0,
       } : undefined
     });
 
-    return await renderToBuffer(pdfDocument);
+    // Import Document component from react-pdf/renderer
+    const { Document } = require('@react-pdf/renderer');
+
+    // Wrap in Document component for proper PDF generation
+    const document = React.createElement(
+      Document,
+      null,
+      pdfComponent
+    );
+
+    return await renderToBuffer(document);
   } catch (error) {
     console.error('Failed to generate PDF:', error);
     return undefined;

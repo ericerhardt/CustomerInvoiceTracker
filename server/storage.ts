@@ -211,10 +211,10 @@ export class DatabaseStorage implements IStorage {
   // Invoice items operations
   async createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> {
     const [newItem] = await db.insert(invoiceItems).values({
+      invoiceId: item.invoiceId,
       description: item.description,
-      quantity: item.quantity.toString(),
+      quantity: item.quantity,
       unitPrice: item.unitPrice.toString(),
-      invoiceId: item.invoiceId
     }).returning();
     return newItem;
   }
@@ -234,18 +234,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertSettings(settingsData: InsertSettings & { userId: number }): Promise<Settings> {
-    // First try to update
-    const [updated] = await db
-      .update(settings)
-      .set(settingsData)
-      .where(eq(settings.userId, settingsData.userId))
-      .returning();
+    try {
+      // First try to get existing settings
+      const existingSettings = await this.getSettingsByUserId(settingsData.userId);
 
-    if (updated) return updated;
+      const settingsToUpsert = {
+        ...settingsData,
+        // Convert taxRate to string since that's what the database expects
+        taxRate: settingsData.taxRate.toString(),
+        // Ensure all required fields have defaults
+        companyName: settingsData.companyName || '',
+        companyAddress: settingsData.companyAddress || '',
+        companyEmail: settingsData.companyEmail || '',
+        stripeSecretKey: settingsData.stripeSecretKey || '',
+        stripePublicKey: settingsData.stripePublicKey || '',
+        stripeWebhookSecret: settingsData.stripeWebhookSecret || null,
+        sendGridApiKey: settingsData.sendGridApiKey || '',
+        sendGridFromEmail: settingsData.sendGridFromEmail || '',
+        resetLinkUrl: settingsData.resetLinkUrl || 'http://localhost:5000/reset-password',
+      };
 
-    // If no update happened, insert
-    const [inserted] = await db.insert(settings).values(settingsData).returning();
-    return inserted;
+      if (existingSettings) {
+        // If settings exist, update them
+        const [updated] = await db
+          .update(settings)
+          .set(settingsToUpsert)
+          .where(eq(settings.userId, settingsData.userId))
+          .returning();
+        return updated;
+      } else {
+        // If no settings exist, insert new ones
+        const [inserted] = await db
+          .insert(settings)
+          .values(settingsToUpsert)
+          .returning();
+        return inserted;
+      }
+    } catch (error) {
+      console.error('Failed to upsert settings:', error);
+      throw error;
+    }
   }
 }
 
