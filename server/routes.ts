@@ -4,6 +4,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import Stripe from "stripe";
 import React from 'react';
+import { pdf, Document } from '@react-pdf/renderer';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
 import type { InvoiceItem } from "@shared/schema";
 import express from "express";
@@ -103,11 +104,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (invoiceId) {
             try {
-              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-              console.log(`Successfully updated invoice ${invoiceId} status to paid (via checkout)`);
+              const charge = await stripeInstance.charges.retrieve(session.payment_intent as string);
+              const receiptUrl = charge.receipt_url;
+
+              // Update invoice with receipt URL (this will also set status to paid)
+              await storage.updateInvoiceReceipt(parseInt(invoiceId), receiptUrl || '');
+              console.log(`Successfully updated invoice ${invoiceId} status and receipt`);
             } catch (updateError) {
-              console.error(`Failed to update invoice ${invoiceId} status:`, updateError);
-              throw updateError; // Re-throw to trigger error handling
+              console.error(`Failed to update invoice ${invoiceId}:`, updateError);
+              throw updateError;
             }
           } else {
             console.warn('No invoiceId found in checkout session metadata');
@@ -124,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             metadata: paymentIntent.metadata,
             hasCharges: paymentIntent.latest_charge ? 'yes' : 'no'
           });
-
+          /*
           if (invoiceId) {
             try {
               // Get the receipt URL from the latest charge
@@ -142,7 +147,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           } else {
             console.warn('No invoiceId found in payment intent metadata');
-          }
+           }
+           */
           break;
         }
         default:
@@ -384,8 +390,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Ensure we have a complete URL for the redirect
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
-      console.log('Creating new payment link with redirect URL:', redirectUrl);
+      const successUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
+      console.log('Creating payment link with success URL:', successUrl);
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
           price: price.id,
@@ -396,7 +402,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         after_completion: {
           type: 'redirect',
-          redirect: { url: redirectUrl }
+          redirect: { url: successUrl }
         }
       });
 
@@ -512,9 +518,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
+      const successUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
 
-      console.log('Creating new payment link with redirect URL:', redirectUrl);
+      console.log('Creating new payment link with success URL:', successUrl);
 
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
@@ -526,7 +532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         after_completion: {
           type: 'redirect',
-          redirect: { url: redirectUrl }
+          redirect: { url: successUrl }
         }
       });
 
@@ -704,6 +710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Helper function for generating PDF
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
   try {
+    // Create InvoicePDF component with props
     const pdfComponent = React.createElement(InvoicePDF, {
       items: items.map(item => ({
         description: item.description,
@@ -721,17 +728,12 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
       } : undefined
     });
 
-    // Import Document component from react-pdf/renderer
-    const { Document } = require('@react-pdf/renderer');
+    // Create PDF document with proper typing
+    const document = React.createElement(Document, {}, pdfComponent);
 
-    // Wrap in Document component for proper PDF generation
-    const document = React.createElement(
-      Document,
-      null,
-      pdfComponent
-    );
-
-    return await renderToBuffer(document);
+    // Generate PDF buffer
+    const buffer = await pdf(document).toBuffer();
+    return Buffer.isBuffer(buffer) ? buffer : undefined;
   } catch (error) {
     console.error('Failed to generate PDF:', error);
     return undefined;

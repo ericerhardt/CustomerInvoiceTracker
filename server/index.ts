@@ -54,13 +54,49 @@ const errorHandler = (err: any, _req: Request, res: Response, _next: NextFunctio
   res.status(status).json({ message });
 };
 
+async function listProcessesOnPort(port: number): Promise<string> {
+  return new Promise((resolve) => {
+    exec(`lsof -i :${port} -n`, (error, stdout, stderr) => {
+      if (error) {
+        console.log(`Error listing processes on port ${port}:`, error.message);
+        resolve(`Error: ${error.message}`);
+      } else {
+        resolve(stdout || 'No processes found');
+      }
+    });
+  });
+}
+
+async function killProcessOnPort(port: number): Promise<boolean> {
+  console.log(`Attempting to kill process on port ${port}...`);
+
+  // First list processes using the port
+  const processList = await listProcessesOnPort(port);
+  console.log(`Current processes on port ${port}:\n${processList}`);
+
+  return new Promise((resolve) => {
+    exec(`lsof -i :${port} -t | xargs -r kill -9`, (error) => {
+      if (error) {
+        console.log(`Could not terminate process on port ${port}:`, error.message);
+        resolve(false);
+      } else {
+        console.log(`Successfully terminated process on port ${port}`);
+        resolve(true);
+      }
+    });
+  });
+}
+
 async function checkPort(port: number): Promise<boolean> {
+  console.log(`Checking if port ${port} is available...`);
   return new Promise((resolve) => {
     const tester = net.createServer()
-      .once('error', () => {
+      .once('error', (err) => {
+        console.log(`Port ${port} is not available:`, err.message);
         resolve(false);
       })
       .once('listening', () => {
+        console.log(`Port ${port} is available`);
         tester.once('close', () => {
           resolve(true);
         }).close();
@@ -72,25 +108,38 @@ async function checkPort(port: number): Promise<boolean> {
 // Initialize server with proper error handling
 async function startServer() {
   try {
-    const PORT = 5000;
+    const PORT = 5001; // Temporarily changed for testing
+    const RETRY_DELAY = 3000; // 3 seconds delay
+    const MAX_RETRIES = 5;
+    const KILL_ATTEMPTS = 3;
 
-    // Check if port is available
-    const isPortAvailable = await checkPort(PORT);
+    // Initial port check
+    let isPortAvailable = await checkPort(PORT);
+
+    // Multiple attempts to free up the port if needed
     if (!isPortAvailable) {
-      console.log(`Port ${PORT} is in use. Attempting to terminate existing Node.js process...`);
-      try {
-        await new Promise((resolve) => {
-          exec(`lsof -i :${PORT} -t | xargs -r kill -9`, (error: any) => {
-            if (error) {
-              console.log('Could not terminate existing process, but continuing anyway...');
-            }
-            resolve(true);
-          });
-        });
-        // Wait a moment for the port to be released
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (error) {
-        console.error('Error while trying to free port:', error);
+      console.log(`Port ${PORT} is in use. Making ${KILL_ATTEMPTS} attempts to free it...`);
+
+      for (let i = 0; i < KILL_ATTEMPTS; i++) {
+        console.log(`Kill attempt ${i + 1}/${KILL_ATTEMPTS}`);
+
+        // Try to kill the process
+        await killProcessOnPort(PORT);
+
+        // Wait for port to be released
+        console.log(`Waiting ${RETRY_DELAY}ms for port to be released...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+
+        // Check if port is now available
+        isPortAvailable = await checkPort(PORT);
+        if (isPortAvailable) {
+          console.log(`Successfully freed port ${PORT} on attempt ${i + 1}`);
+          break;
+        }
+      }
+
+      if (!isPortAvailable) {
+        throw new Error(`Failed to free port ${PORT} after ${KILL_ATTEMPTS} attempts`);
       }
     }
 
@@ -110,22 +159,28 @@ async function startServer() {
     }
 
     // Start listening with retry logic
-    let retries = 3;
-    const startListening = () => {
-      server.listen(PORT, "0.0.0.0", () => {
-        log(`serving on port ${PORT}`);
-      }).on('error', (error: Error & { code?: string }) => {
-        if (error.code === 'EADDRINUSE' && retries > 0) {
+    let retries = MAX_RETRIES;
+    const startListening = async () => {
+      try {
+        server.listen(PORT, "0.0.0.0", () => {
+          log(`Server running on port ${PORT}`);
+        }).on('error', (error: Error & { code?: string }) => {
+          console.error('Server listen error:', error);
+          throw error;
+        });
+      } catch (error) {
+        console.error('Error in startListening:', error);
+        if (retries > 0) {
           retries--;
-          console.log(`Retrying in 1 second... (${retries} attempts remaining)`);
-          setTimeout(startListening, 1000);
+          console.log(`Error starting server. Retrying in ${RETRY_DELAY}ms... (${retries} attempts remaining)`);
+          setTimeout(startListening, RETRY_DELAY);
         } else {
           throw error;
         }
-      });
+      }
     };
 
-    startListening();
+    await startListening();
 
     // Handle process termination
     process.on('SIGTERM', () => {
@@ -138,11 +193,17 @@ async function startServer() {
 
   } catch (error) {
     console.error('Failed to start server:', error);
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack);
+    }
     process.exit(1);
   }
 }
 
 startServer().catch((error) => {
   console.error('Unhandled server startup error:', error);
+  if (error instanceof Error) {
+    console.error('Error stack:', error.stack);
+  }
   process.exit(1);
 });
