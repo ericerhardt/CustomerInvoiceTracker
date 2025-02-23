@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   } = useQuery<SelectUser | undefined, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+    staleTime: 0,
   });
 
   const loginMutation = useMutation({
@@ -38,9 +39,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
+      console.log('Login successful, invalidating queries...');
+      // Clear all existing queries before setting new user data
+      queryClient.clear();
       queryClient.setQueryData(["/api/user"], user);
+      console.log('Queries invalidated and user data set');
     },
     onError: (error: Error) => {
+      console.error('Login failed:', error);
       toast({
         title: "Login failed",
         description: error.message,
@@ -55,9 +61,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
+      console.log('Registration successful, invalidating queries...');
+      // Clear all existing queries before setting new user data
+      queryClient.clear();
       queryClient.setQueryData(["/api/user"], user);
+      console.log('Queries invalidated and user data set');
     },
     onError: (error: Error) => {
+      console.error('Registration failed:', error);
       toast({
         title: "Registration failed",
         description: error.message,
@@ -81,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     },
     onError: (error: Error) => {
+      console.error('Password reset failed:', error);
       toast({
         title: "Reset failed",
         description: error.message,
@@ -94,9 +106,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {
+      console.log('Logout successful, clearing all queries...');
+      // Clear all queries and cache on logout
+      queryClient.clear();
       queryClient.setQueryData(["/api/user"], null);
+      console.log('All queries cleared and user data reset');
     },
     onError: (error: Error) => {
+      console.error('Logout failed:', error);
       toast({
         title: "Logout failed",
         description: error.message,
