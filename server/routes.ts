@@ -28,7 +28,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     stripe = new Stripe(settings.stripeSecretKey, {
-      apiVersion: '2024-12-18.acacia' as any, // Cast to any to avoid TypeScript error
+      apiVersion: '2024-12-18.acacia' as any,
       typescript: true,
     });
 
@@ -37,16 +37,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create a separate router for the webhook endpoint
   const webhookRouter = express.Router();
-  // Mount webhook router before ANY other middleware or route
-  app.use('/webhook', webhookRouter);
   // Configure raw body handling specifically for webhook route
   webhookRouter.use(express.raw({ type: 'application/json' }));
 
+  // Mount webhook router BEFORE auth middleware and other routes
+  app.use('/webhook', webhookRouter);
+
+  // Handle Stripe webhook
   webhookRouter.post("/", async (req, res) => {
     try {
       const sig = req.headers['stripe-signature'];
 
-      // Enhanced logging for webhook details
       console.log('Webhook request received:', {
         method: req.method,
         path: req.path,
@@ -129,9 +130,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-
-
-  // Setup auth and other middleware AFTER webhook route
+  // Setup auth middleware AFTER webhook route
   setupAuth(app);
 
   // Customers
@@ -310,7 +309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Ensure we have a complete URL for the redirect
-     // const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      // const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
       const baseUrl = `https://ingenz.app`;
       const redirectUrl = new URL(`/create-invoice/${invoice.id}`, baseUrl).toString();
 
@@ -636,5 +635,3 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
     return undefined;
   }
 }
-
- 
