@@ -37,7 +37,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create a separate router for the webhook endpoint
   const webhookRouter = express.Router();
-
+  // Mount webhook router before ANY other middleware or route
+  app.use('/webhook', webhookRouter);
   // Configure raw body handling specifically for webhook route
   webhookRouter.use(express.raw({ type: 'application/json' }));
 
@@ -128,8 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Mount webhook router before ANY other middleware or route
-  app.use('/webhook', webhookRouter);
+
 
   // Setup auth and other middleware AFTER webhook route
   setupAuth(app);
@@ -310,8 +310,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Ensure we have a complete URL for the redirect
-      const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/invoice/${invoice.id}`, baseUrl).toString();
+     // const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      const baseUrl = `https://ingenz.app`;
+      const redirectUrl = new URL(`/create-invoice/${invoice.id}`, baseUrl).toString();
 
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
@@ -438,8 +439,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/invoice/${invoice.id}`, baseUrl).toString();
+      //const baseUrl = process.env.PUBLIC_URL ||`https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      const baseUrl = `https://ingenz.app`;
+      const redirectUrl = new URL(`/create-invoice/${invoice.id}`, baseUrl).toString();
 
       console.log('Creating new payment link with redirect URL:', redirectUrl);
 
@@ -635,6 +637,4 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
   }
 }
 
-async function sendInvoiceEmail(options: any) {
-    //Implementation for sending email
-}
+ 
