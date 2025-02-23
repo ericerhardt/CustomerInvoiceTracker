@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, decimal, boolean, timestamp } from "dri
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Keep existing table definitions unchanged to preserve data types
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -39,6 +40,22 @@ export const invoiceItems = pgTable("invoice_items", {
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
 });
 
+export const settings = pgTable("settings", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  companyName: text("company_name").notNull(),
+  companyAddress: text("company_address").notNull(),
+  companyEmail: text("company_email").notNull(),
+  stripeSecretKey: text("stripe_secret_key").notNull(),
+  stripePublicKey: text("stripe_public_key").notNull(),
+  stripeWebhookSecret: text("stripe_webhook_secret"), // Making it nullable initially
+  sendGridApiKey: text("sendgrid_api_key").notNull(),
+  sendGridFromEmail: text("sendgrid_from_email").notNull(),
+  resetLinkUrl: text("reset_link_url").notNull().default("http://localhost:5000/reset-password"),
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default('10'),
+});
+
+// Keep all other schema exports and types the same
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -76,30 +93,6 @@ export const insertInvoiceItemSchema = createInsertSchema(invoiceItems)
     unitPrice: z.coerce.number().positive(),
   });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
-export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
-export type InsertInvoiceItem = z.infer<typeof insertInvoiceItemSchema>;
-
-export type User = typeof users.$inferSelect;
-export type Customer = typeof customers.$inferSelect;
-export type Invoice = typeof invoices.$inferSelect;
-export type InvoiceItem = typeof invoiceItems.$inferSelect;
-
-export const settings = pgTable("settings", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  companyName: text("company_name").notNull(),
-  companyAddress: text("company_address").notNull(),
-  companyEmail: text("company_email").notNull(),
-  stripeSecretKey: text("stripe_secret_key").notNull(),
-  stripePublicKey: text("stripe_public_key").notNull(),
-  sendGridApiKey: text("sendgrid_api_key").notNull(),
-  sendGridFromEmail: text("sendgrid_from_email").notNull(),
-  resetLinkUrl: text("reset_link_url").notNull().default("http://localhost:5000/reset-password"),
-  taxRate: decimal("tax_rate").notNull().default('10'), 
-});
-
 export const insertSettingsSchema = createInsertSchema(settings)
   .pick({
     companyName: true,
@@ -107,6 +100,7 @@ export const insertSettingsSchema = createInsertSchema(settings)
     companyEmail: true,
     stripeSecretKey: true,
     stripePublicKey: true,
+    stripeWebhookSecret: true,
     sendGridApiKey: true,
     sendGridFromEmail: true,
     resetLinkUrl: true,
@@ -115,7 +109,19 @@ export const insertSettingsSchema = createInsertSchema(settings)
   .extend({
     taxRate: z.coerce.number().min(0).max(100),
     resetLinkUrl: z.string().url("Must be a valid URL"),
+    stripeWebhookSecret: z.string().refine((val) => val?.startsWith('whsec_'), {
+      message: "Stripe webhook secret must start with 'whsec_'"
+    }).optional(), // Make it optional to match the nullable column
   });
 
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type InsertInvoiceItem = z.infer<typeof insertInvoiceItemSchema>;
 export type InsertSettings = z.infer<typeof insertSettingsSchema>;
+
+export type User = typeof users.$inferSelect;
+export type Customer = typeof customers.$inferSelect;
+export type Invoice = typeof invoices.$inferSelect;
+export type InvoiceItem = typeof invoiceItems.$inferSelect;
 export type Settings = typeof settings.$inferSelect;

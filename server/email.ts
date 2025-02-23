@@ -41,6 +41,7 @@ export async function sendInvoiceEmail({
 
     // Get settings from database
     const settings = await storage.getSettingsByUserId(userId);
+    console.log('Settings:', settings);
     if (!settings?.sendGridApiKey) {
       throw new Error('SendGrid API key not configured in settings');
     }
@@ -50,7 +51,7 @@ export async function sendInvoiceEmail({
     if (!settings.sendGridApiKey.startsWith('SG.')) {
       throw new Error('Invalid SendGrid API key format in settings. Must start with "SG."');
     }
-
+    
     const apiKey = settings.sendGridApiKey;
     const fromEmail = settings.sendGridFromEmail;
     const companyName = settings.companyName || 'Invoice System';
