@@ -43,6 +43,7 @@ export interface IStorage {
   upsertSettings(settings: InsertSettings & { userId: number }): Promise<Settings>;
 
   sessionStore: session.Store;
+  updateInvoiceReceipt(id: number, receiptUrl: string): Promise<Invoice>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -274,6 +275,23 @@ export class DatabaseStorage implements IStorage {
       console.error('Failed to upsert settings:', error);
       throw error;
     }
+  }
+  async updateInvoiceReceipt(id: number, receiptUrl: string): Promise<Invoice> {
+    console.log(`Updating receipt URL for invoice ${id}:`, receiptUrl);
+    const [updatedInvoice] = await db
+      .update(invoices)
+      .set({
+        stripeReceiptUrl: receiptUrl,
+        status: 'paid' // Also update status to paid when receipt is added
+      })
+      .where(eq(invoices.id, id))
+      .returning();
+
+    if (!updatedInvoice) {
+      throw new Error(`Failed to update receipt URL for invoice ${id}`);
+    }
+
+    return updatedInvoice;
   }
 }
 

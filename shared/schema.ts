@@ -30,6 +30,7 @@ export const invoices = pgTable("invoices", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   stripePaymentId: text("stripe_payment_id"),
   stripePaymentUrl: text("stripe_payment_url"),
+  stripeReceiptUrl: text("stripe_receipt_url"), // Add the new receipt URL field
 });
 
 export const invoiceItems = pgTable("invoice_items", {

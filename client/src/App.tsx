@@ -10,6 +10,7 @@ import CreateInvoice from "@/pages/create-invoice";
 import Settings from "@/pages/settings";
 import Customers from "@/pages/customers";
 import Invoices from "@/pages/invoices";
+import ThankYou from "@/pages/thank-you";
 import { ProtectedRoute } from "./lib/protected-route";
 
 function Router() {
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/customers" component={() => <ProtectedRoute path="/customers" component={Customers} />} />
       <Route path="/invoices" component={() => <ProtectedRoute path="/invoices" component={Invoices} />} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/thank-you" component={ThankYou} />
       <Route component={NotFound} />
     </Switch>
   );
