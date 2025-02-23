@@ -24,7 +24,7 @@ export const invoices = pgTable("invoices", {
   number: text("number").notNull(),
   customerId: integer("customer_id").notNull(),
   userId: integer("user_id").notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),  // Explicitly set precision and scale
   status: text("status").notNull().default("pending"),
   dueDate: timestamp("due_date").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -37,7 +37,7 @@ export const invoiceItems = pgTable("invoice_items", {
   invoiceId: integer("invoice_id").notNull(),
   description: text("description").notNull(),
   quantity: integer("quantity").notNull(),
-  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),  // Explicitly set precision and scale
 });
 
 export const settings = pgTable("settings", {
@@ -48,14 +48,14 @@ export const settings = pgTable("settings", {
   companyEmail: text("company_email").notNull(),
   stripeSecretKey: text("stripe_secret_key").notNull(),
   stripePublicKey: text("stripe_public_key").notNull(),
-  stripeWebhookSecret: text("stripe_webhook_secret"), // Making it nullable initially
+  stripeWebhookSecret: text("stripe_webhook_secret"), 
   sendGridApiKey: text("sendgrid_api_key").notNull(),
   sendGridFromEmail: text("sendgrid_from_email").notNull(),
   resetLinkUrl: text("reset_link_url").notNull().default("http://localhost:5000/reset-password"),
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default('10'),
 });
 
-// Keep all other schema exports and types the same
+// Keep schema exports and types unchanged
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -111,7 +111,7 @@ export const insertSettingsSchema = createInsertSchema(settings)
     resetLinkUrl: z.string().url("Must be a valid URL"),
     stripeWebhookSecret: z.string().refine((val) => val?.startsWith('whsec_'), {
       message: "Stripe webhook secret must start with 'whsec_'"
-    }).optional(), // Make it optional to match the nullable column
+    }).optional(),
   });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
