@@ -53,15 +53,12 @@ export async function sendInvoiceEmail({
       throw new Error('SendGrid sender email not configured');
     }
 
-    console.log('Configuring SendGrid with API key...');
-    sgMail.setApiKey(apiKey);
+    if (!apiKey.startsWith('SG.')) {
+      throw new Error('Invalid SendGrid API key format. Must start with "SG."');
+    }
 
-    console.log('Sending invoice email with parameters:', {
-      to,
-      from: fromEmail,
-      invoiceNumber,
-      hasAttachment: !!pdfBuffer
-    });
+    console.log('Configuring SendGrid with API key and attempting to send to:', to);
+    sgMail.setApiKey(apiKey);
 
     const msg = {
       to,
@@ -93,14 +90,29 @@ export async function sendInvoiceEmail({
       ] : undefined,
     };
 
+    console.log('Sending email with SendGrid...', { to, invoiceNumber });
     const [response] = await sgMail.send(msg);
-    console.log('SendGrid API Response:', response.statusCode, response.headers);
-    return true;
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      console.log('SendGrid email sent successfully:', {
+        statusCode: response.statusCode,
+        to,
+        invoiceNumber
+      });
+      return true;
+    } else {
+      throw new Error(`Unexpected SendGrid status code: ${response.statusCode}`);
+    }
   } catch (error) {
     console.error('Failed to send invoice email:', error);
     if (error instanceof Error) {
       console.error('SendGrid Error Details:', error.message);
-      throw new Error(`Failed to send invoice email: ${error.message}`);
+      if (error.message.includes('authorization') || error.message.includes('forbidden')) {
+        throw new Error('SendGrid API key is invalid or has insufficient permissions');
+      }
+      if (error.message.includes('verified Sender Identity')) {
+        throw new Error('Email sender not verified with SendGrid. Please verify your sender email.');
+      }
     }
     throw new Error('Failed to send invoice email');
   }
@@ -130,6 +142,10 @@ export async function sendPasswordResetEmail({
       throw new Error('SendGrid sender email not configured');
     }
 
+    if (!apiKey.startsWith('SG.')) {
+      throw new Error('Invalid SendGrid API key format. Must start with "SG."');
+    }
+
     console.log('Configuring SendGrid with API key...');
     sgMail.setApiKey(apiKey);
 
@@ -157,15 +173,28 @@ export async function sendPasswordResetEmail({
       `,
     };
 
-    console.log('Attempting to send password reset email...');
+    console.log('Sending password reset email...', { to });
     const [response] = await sgMail.send(msg);
-    console.log('SendGrid API Response:', response.statusCode);
-    return true;
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      console.log('Password reset email sent successfully:', {
+        statusCode: response.statusCode,
+        to
+      });
+      return true;
+    } else {
+      throw new Error(`Unexpected SendGrid status code: ${response.statusCode}`);
+    }
   } catch (error) {
     console.error('Failed to send password reset email:', error);
     if (error instanceof Error) {
       console.error('SendGrid Error Details:', error.message);
-      throw new Error(`Failed to send password reset email: ${error.message}`);
+      if (error.message.includes('authorization') || error.message.includes('forbidden')) {
+        throw new Error('SendGrid API key is invalid or has insufficient permissions');
+      }
+      if (error.message.includes('verified Sender Identity')) {
+        throw new Error('Email sender not verified with SendGrid. Please verify your sender email.');
+      }
     }
     throw new Error('Failed to send password reset email');
   }

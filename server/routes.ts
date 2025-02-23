@@ -346,7 +346,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!settings.sendGridApiKey.startsWith('SG.')) {
           throw new Error('Invalid SendGrid API key format');
         }
-        process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
         await sendInvoiceEmail({
           to: customer.email,
           invoiceNumber: invoice.number,
@@ -469,7 +468,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send email with PDF attachment
       if (settings?.sendGridApiKey) {
         console.log('Attempting to send invoice email to:', customer.email);
-
         try {
           await sendInvoiceEmail({
             to: customer.email,
@@ -481,23 +479,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId: req.user.id
           });
           console.log('Successfully sent invoice email');
+          res.json(updatedInvoice);
         } catch (emailError) {
           console.error('Failed to send invoice email:', emailError);
-          // Include error details in the response but don't throw
-          return res.status(200).json({
+          res.status(200).json({
             ...updatedInvoice,
             emailError: emailError instanceof Error ? emailError.message : 'Unknown email error'
           });
         }
       } else {
         console.log('SendGrid API key not configured, skipping email send');
-        return res.status(200).json({
+        res.status(200).json({
           ...updatedInvoice,
           emailError: 'SendGrid API key not configured'
         });
       }
-
-      res.json(updatedInvoice);
     } catch (error) {
       console.error('Failed to resend invoice:', error);
       res.status(500).json({
