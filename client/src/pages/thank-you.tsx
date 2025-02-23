@@ -3,24 +3,25 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Receipt, Loader2 } from "lucide-react";
-import { Customer, Invoice } from "@shared/schema";
+import type { Invoice } from "@shared/schema";
 
 export default function ThankYou() {
   // Get invoice ID from URL params
   const params = new URLSearchParams(window.location.search);
   const invoiceId = params.get('invoice');
 
-  const { data: invoice, isLoading: isLoadingInvoice } = useQuery<Invoice>({
+  const { data, isLoading, error } = useQuery({
     queryKey: [`/api/public/invoices/${invoiceId}`],
     enabled: !!invoiceId,
+    queryFn: async () => {
+      const res = await fetch(`/api/public/invoices/${invoiceId}`);
+      if (!res.ok) throw new Error("Invoice not found");
+      const json = await res.json();
+      return json.invoice as Invoice & { customer: { name: string; email: string; phone?: string } };
+    }
   });
 
-  const { data: customer, isLoading: isLoadingCustomer } = useQuery<Customer>({
-    queryKey: [`/api/public/customers/${invoice?.customerId}`],
-    enabled: !!invoice?.customerId,
-  });
-
-  if (isLoadingInvoice || isLoadingCustomer) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -28,7 +29,7 @@ export default function ThankYou() {
     );
   }
 
-  if (!invoice || !customer) {
+  if (error || !data) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="w-full max-w-lg">
@@ -53,25 +54,25 @@ export default function ThankYou() {
           <div className="text-center mb-6">
             <p className="text-lg">Your payment has been processed successfully.</p>
           </div>
-          
+
           <div className="space-y-2">
             <h3 className="font-semibold">Payment Details:</h3>
-            <p>Invoice Number: {invoice.number}</p>
-            <p>Amount Paid: ${Number(invoice.amount).toFixed(2)}</p>
-            <p>Date: {new Date(invoice.createdAt).toLocaleDateString()}</p>
+            <p>Invoice Number: {data.number}</p>
+            <p>Amount Paid: ${Number(data.amount).toFixed(2)}</p>
+            <p>Date: {new Date(data.createdAt).toLocaleDateString()}</p>
           </div>
 
           <div className="space-y-2">
             <h3 className="font-semibold">Customer Information:</h3>
-            <p>Name: {customer.name}</p>
-            <p>Email: {customer.email}</p>
-            {customer.phone && <p>Phone: {customer.phone}</p>}
+            <p>Name: {data.customer.name}</p>
+            <p>Email: {data.customer.email}</p>
+            {data.customer.phone && <p>Phone: {data.customer.phone}</p>}
           </div>
 
-          {invoice.stripeReceiptUrl && (
+          {data.stripeReceiptUrl && (
             <div className="mt-6 text-center">
               <a 
-                href={invoice.stripeReceiptUrl} 
+                href={data.stripeReceiptUrl} 
                 target="_blank" 
                 rel="noopener noreferrer"
               >

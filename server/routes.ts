@@ -152,6 +152,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add this public endpoint before setupAuth(app)
+  app.get("/api/public/invoices/:id", async (req, res) => {
+    try {
+      const invoice = await storage.getInvoice(parseInt(req.params.id));
+      if (!invoice) {
+        console.log(`Invoice not found: ${req.params.id}`);
+        return res.status(404).json({ message: 'Invoice not found' });
+      }
+
+      const items = await storage.getInvoiceItems(invoice.id);
+      const customer = await storage.getCustomer(invoice.customerId);
+      if (!customer) {
+        return res.status(404).json({ message: 'Customer not found' });
+      }
+
+      res.json({
+        invoice: {
+          ...invoice,
+          items,
+          customer: {
+            name: customer.name,
+            email: customer.email,
+            address: customer.address
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching public invoice:', error);
+      res.status(500).json({
+        message: 'Failed to fetch invoice',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Setup auth middleware AFTER webhook route
   setupAuth(app);
 
