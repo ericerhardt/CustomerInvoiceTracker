@@ -43,6 +43,9 @@ apiRouter.use((req, res, next) => {
   next();
 });
 
+// Mount the API router before route registration
+app.use('/api', apiRouter);
+
 // Global error handler
 const errorHandler = (err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Global error:', err);
@@ -76,22 +79,12 @@ async function startServer() {
     if (!isPortAvailable) {
       console.log(`Port ${PORT} is in use. Attempting to terminate existing Node.js process...`);
       try {
-        // First try to find and kill Node.js processes specifically
         await new Promise((resolve) => {
-          exec(`pgrep -f "node.*:${PORT}" | xargs -r kill -9`, (error: any) => {
+          exec(`lsof -i :${PORT} -t | xargs -r kill -9`, (error: any) => {
             if (error) {
-              console.log('Could not find Node.js process, trying generic port kill...');
-              // Fallback to any process using the port
-              exec(`lsof -i :${PORT} -t | xargs -r kill -9`, (error: any) => {
-                if (error) {
-                  console.log('Could not terminate existing process, but continuing anyway...');
-                }
-                resolve(true);
-              });
-            } else {
-              console.log('Successfully terminated Node.js process');
-              resolve(true);
+              console.log('Could not terminate existing process, but continuing anyway...');
             }
+            resolve(true);
           });
         });
         // Wait a moment for the port to be released
@@ -106,9 +99,6 @@ async function startServer() {
 
     const server = await registerRoutes(app);
 
-    // Mount the API router after webhook registration
-    app.use('/api', apiRouter);
-
     // Add error handler after all routes
     app.use(errorHandler);
 
@@ -118,17 +108,6 @@ async function startServer() {
     } else {
       serveStatic(app);
     }
-
-    // Handle server errors
-    server.on('error', (error: Error & { code?: string }) => {
-      if (error.code === 'EADDRINUSE') {
-        console.error(`Port ${PORT} is still in use. Please ensure no other process is using this port.`);
-        process.exit(1);
-      } else {
-        console.error('Server error:', error);
-        process.exit(1);
-      }
-    });
 
     // Start listening with retry logic
     let retries = 3;
