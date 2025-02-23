@@ -12,29 +12,24 @@ import { users } from "@shared/schema";
 import { db } from "./db";
 import { sendInvoiceEmail } from "./email";
 
-export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize Stripe with empty config - will be updated when needed
-  let stripe: Stripe | null = null;
-
-  // Helper function to get or create Stripe instance
-  async function getStripe(userId: number) {
-    const settings = await storage.getSettingsByUserId(userId);
-    if (!settings?.stripeSecretKey) {
-      throw new Error("Stripe secret key not configured. Please add it in settings.");
-    }
-
-    if (!settings.stripeSecretKey.startsWith('sk_')) {
-      throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
-    }
-
-    stripe = new Stripe(settings.stripeSecretKey, {
-      apiVersion: '2024-12-18.acacia' as any,
-      typescript: true,
-    });
-
-    return stripe;
+// Update the getStripe helper function to include better error handling
+async function getStripe(userId: number) {
+  const settings = await storage.getSettingsByUserId(userId);
+  if (!settings?.stripeSecretKey) {
+    throw new Error("Stripe secret key not configured. Please add it in settings.");
   }
 
+  if (!settings.stripeSecretKey.startsWith('sk_')) {
+    throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
+  }
+
+  return new Stripe(settings.stripeSecretKey, {
+    apiVersion: '2024-12-18.acacia' as any,
+    typescript: true,
+  });
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
   // Create a separate router for the webhook endpoint
   const webhookRouter = express.Router();
   // Configure raw body handling specifically for webhook route
@@ -170,11 +165,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/customers", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
-    const customer = await storage.createCustomer({
-      ...req.body,
-      userId: req.user.id,
-    });
-    res.status(201).json(customer);
+    try {
+      const customer = await storage.createCustomer({
+        ...req.body,
+        userId: req.user.id,
+      });
+      res.status(201).json(customer);
+    } catch (error) {
+      console.error('Failed to create customer:', error);
+      res.status(500).json({
+        message: 'Failed to create customer',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   });
 
   app.patch("/api/customers/:id", async (req, res) => {
@@ -193,7 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Failed to update customer:', error);
       res.status(500).json({
         message: 'Failed to update customer',
-        error: (error as Error).message
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
@@ -211,7 +214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Failed to delete customer:', error);
       res.status(500).json({
         message: 'Failed to delete customer',
-        error: (error as Error).message
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
@@ -231,6 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const items = await storage.getInvoiceItems(invoice.id);
     const customer = await storage.getCustomer(invoice.customerId);
+    if (customer?.userId !== req.user.id) return res.sendStatus(403);
 
     res.json({ ...invoice, items, customer });
   });
@@ -338,7 +342,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Ensure we have a complete URL for the redirect
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-     // const baseUrl = `https://ingenz.app`;
       const redirectUrl = new URL(`/create-invoice/${invoice.id}`, baseUrl).toString();
       console.log('Creating new payment link with redirect URL:', redirectUrl);
       const paymentLink = await stripeInstance.paymentLinks.create({
@@ -467,7 +470,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-    //  const baseUrl = `https://ingenz.app`;
       const redirectUrl = new URL(`/create-invoice/${invoice.id}`, baseUrl).toString();
 
       console.log('Creating new payment link with redirect URL:', redirectUrl);

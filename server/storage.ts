@@ -2,7 +2,7 @@ import { users, customers, invoices, invoiceItems, settings } from "@shared/sche
 import type { User, Customer, Invoice, InvoiceItem, InsertUser, InsertCustomer, InsertInvoice, InsertInvoiceItem } from "@shared/schema";
 import type { Settings, InsertSettings } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
@@ -85,7 +85,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  // Customer operations
+  // Customer operations with userId filtering
   async getCustomersByUserId(userId: number): Promise<Customer[]> {
     return await db.select().from(customers).where(eq(customers.userId, userId));
   }
@@ -104,7 +104,7 @@ export class DatabaseStorage implements IStorage {
     const [updatedCustomer] = await db
       .update(customers)
       .set(customer)
-      .where(eq(customers.id, id))
+      .where(and(eq(customers.id, id), eq(customers.userId, customer.userId)))
       .returning();
     return updatedCustomer;
   }
@@ -113,7 +113,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(customers).where(eq(customers.id, id));
   }
 
-  // Invoice operations
+  // Invoice operations with userId filtering
   async updateInvoiceStatus(id: number, status: string): Promise<Invoice> {
     console.log(`Attempting to update invoice ${id} status to ${status}`);
     try {
@@ -145,16 +145,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInvoice(invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
-    // Generate invoice number
     const invoiceNumber = `INV-${Date.now()}`;
 
     const [newInvoice] = await db.insert(invoices).values({
       number: invoiceNumber,
       userId: invoice.userId,
       customerId: invoice.customerId,
-      amount: invoice.amount.toString(), // Convert number to string
+      amount: invoice.amount.toString(),
       status: invoice.status || 'pending',
-      dueDate: new Date(invoice.dueDate), // Ensure proper Date object
+      dueDate: new Date(invoice.dueDate),
       createdAt: new Date(),
       stripePaymentId: null,
       stripePaymentUrl: null
@@ -182,33 +181,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice> {
-    // Ensure dates and numbers are properly handled
     const updateData = {
       customerId: invoice.customerId,
-      amount: invoice.amount.toString(), // Convert number to string
+      amount: invoice.amount.toString(),
       status: invoice.status || 'pending',
-      dueDate: new Date(invoice.dueDate), // Ensure proper Date object
+      dueDate: new Date(invoice.dueDate),
       userId: invoice.userId
     };
 
     const [updatedInvoice] = await db
       .update(invoices)
       .set(updateData)
-      .where(eq(invoices.id, id))
+      .where(and(eq(invoices.id, id), eq(invoices.userId, invoice.userId)))
       .returning();
     return updatedInvoice;
   }
 
   async deleteInvoice(id: number): Promise<void> {
-    await db.delete(invoices).where(eq(invoices.id, id));
+    // First get the invoice to ensure it exists
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
+    if (invoice) {
+      // Delete related invoice items first
+      await this.deleteInvoiceItems(id);
+      // Then delete the invoice
+      await db.delete(invoices).where(eq(invoices.id, id));
+    }
   }
 
   // Invoice items operations
   async createInvoiceItem(item: InsertInvoiceItem & { invoiceId: number }): Promise<InvoiceItem> {
     const [newItem] = await db.insert(invoiceItems).values({
       description: item.description,
-      quantity: item.quantity.toString(), // Convert number to string
-      unitPrice: item.unitPrice.toString(), // Convert number to string
+      quantity: item.quantity.toString(),
+      unitPrice: item.unitPrice.toString(),
       invoiceId: item.invoiceId
     }).returning();
     return newItem;
@@ -222,7 +227,7 @@ export class DatabaseStorage implements IStorage {
     await db.delete(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
   }
 
-  // Settings operations
+  // Settings operations with userId filtering
   async getSettingsByUserId(userId: number): Promise<Settings | undefined> {
     const [userSettings] = await db.select().from(settings).where(eq(settings.userId, userId));
     return userSettings;
