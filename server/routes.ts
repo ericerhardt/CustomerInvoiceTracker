@@ -27,7 +27,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     stripe = new Stripe(settings.stripeSecretKey, {
-      apiVersion: '2022-11-15',
+      apiVersion: '2024-12-18.acacia' as any, // Cast to any to avoid TypeScript error
+      typescript: true,
     });
 
     return stripe;
@@ -47,14 +48,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Webhook request received:', {
         method: req.method,
         path: req.path,
-        headers: {
-          'content-type': req.headers['content-type'],
-          'stripe-signature': sig ? 'Present' : 'Missing'
-        },
+        headers: req.headers,
         bodyType: typeof req.body,
         isBuffer: Buffer.isBuffer(req.body),
-        bodyLength: req.body ? req.body.length : 0,
-        bodyPreview: req.body ? req.body.toString('hex').slice(0, 50) + '...' : 'No body'
+        bodyLength: req.body ? req.body.length : 0
       });
 
       if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -65,13 +62,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).send('Webhook signature or secret missing');
       }
 
-      if (!Buffer.isBuffer(req.body)) {
-        console.error('Received non-buffer payload:', {
-          type: typeof req.body,
-          preview: JSON.stringify(req.body).slice(0, 100)
-        });
-        return res.status(400).send('Invalid payload format');
-      }
 
       // Get settings from first user (webhook doesn't have user context)
       const [firstUser] = await db.select().from(users).limit(1);
@@ -96,9 +86,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (err) {
         console.error('Failed to construct webhook event:', {
           error: err instanceof Error ? err.message : 'Unknown error',
-          signatureHeader: sig,
-          bodyLength: req.body.length,
-          bodyPreview: req.body.toString().slice(0, 100)
+          signatureHeader: sig
         });
         return res.status(400).send(`Webhook signature verification failed`);
       }
@@ -132,9 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const error = err as Error;
       console.error('Webhook processing failed:', {
         error: error.message,
-        stack: error.stack,
-        name: error.name,
-        body: req.body ? req.body.toString('hex').slice(0, 100) : 'No body'
+        stack: error.stack
       });
       return res.status(400).send(`Webhook Error: ${error.message}`);
     }
