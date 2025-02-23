@@ -37,6 +37,8 @@ export async function sendInvoiceEmail({
   }).format(new Date(dueDate));
 
   try {
+    console.log('Starting invoice email process for:', to);
+
     // Get settings from database
     const settings = await storage.getSettingsByUserId(userId);
     if (!settings?.sendGridApiKey) {

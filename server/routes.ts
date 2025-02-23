@@ -475,9 +475,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Failed to generate PDF:', pdfError);
       }
 
-      // Send email
+      // Send email to customer if settings are configured
       if (settings?.sendGridApiKey) {
-        console.log('Attempting to send invoice email to:', customer.email);
         try {
           await sendInvoiceEmail({
             to: customer.email,
