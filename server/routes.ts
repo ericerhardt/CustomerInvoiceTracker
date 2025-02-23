@@ -100,18 +100,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         case 'checkout.session.completed': {
           const session = event.data.object as Stripe.Checkout.Session;
           const invoiceId = session.metadata?.invoiceId;
+
+          console.log('Processing checkout.session.completed:', {
+            sessionId: session.id,
+            invoiceId,
+            metadata: session.metadata
+          });
+
           if (invoiceId) {
-            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-            console.log(`Updated invoice ${invoiceId} status to paid`);
+            try {
+              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Successfully updated invoice ${invoiceId} status to paid (via checkout)`);
+            } catch (updateError) {
+              console.error(`Failed to update invoice ${invoiceId} status:`, updateError);
+              throw updateError; // Re-throw to trigger error handling
+            }
+          } else {
+            console.warn('No invoiceId found in checkout session metadata');
           }
           break;
         }
         case 'payment_intent.succeeded': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent;
           const invoiceId = paymentIntent.metadata?.invoiceId;
+
+          console.log('Processing payment_intent.succeeded:', {
+            paymentIntentId: paymentIntent.id,
+            invoiceId,
+            metadata: paymentIntent.metadata
+          });
+
           if (invoiceId) {
-            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-            console.log(`Updated invoice ${invoiceId} status to paid`);
+            try {
+              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Successfully updated invoice ${invoiceId} status to paid (via payment intent)`);
+            } catch (updateError) {
+              console.error(`Failed to update invoice ${invoiceId} status:`, updateError);
+              throw updateError; // Re-throw to trigger error handling
+            }
+          } else {
+            console.warn('No invoiceId found in payment intent metadata');
           }
           break;
         }
@@ -309,10 +337,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Ensure we have a complete URL for the redirect
-      // const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const baseUrl = `https://ingenz.app`;
+      const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+     // const baseUrl = `https://ingenz.app`;
       const redirectUrl = new URL(`/create-invoice/${invoice.id}`, baseUrl).toString();
-
+      console.log('Creating new payment link with redirect URL:', redirectUrl);
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
           price: price.id,
@@ -438,8 +466,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      //const baseUrl = process.env.PUBLIC_URL ||`https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const baseUrl = `https://ingenz.app`;
+      const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+    //  const baseUrl = `https://ingenz.app`;
       const redirectUrl = new URL(`/create-invoice/${invoice.id}`, baseUrl).toString();
 
       console.log('Creating new payment link with redirect URL:', redirectUrl);
