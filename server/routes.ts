@@ -121,16 +121,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('Processing payment_intent.succeeded:', {
             paymentIntentId: paymentIntent.id,
             invoiceId,
-            metadata: paymentIntent.metadata
+            metadata: paymentIntent.metadata,
+            hasCharges: paymentIntent.latest_charge ? 'yes' : 'no'
           });
 
           if (invoiceId) {
             try {
-              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-              console.log(`Successfully updated invoice ${invoiceId} status to paid (via payment intent)`);
+              // Get the receipt URL from the latest charge
+              const charge = await stripeInstance.charges.retrieve(paymentIntent.latest_charge as string);
+              const receiptUrl = charge.receipt_url;
+
+              console.log('Found receipt URL:', receiptUrl);
+
+              // Update invoice with receipt URL and paid status
+              await storage.updateInvoiceReceipt(parseInt(invoiceId), receiptUrl);
+              console.log(`Successfully updated invoice ${invoiceId} with receipt URL`);
             } catch (updateError) {
-              console.error(`Failed to update invoice ${invoiceId} status:`, updateError);
-              throw updateError; // Re-throw to trigger error handling
+              console.error(`Failed to update invoice ${invoiceId}:`, updateError);
+              throw updateError;
             }
           } else {
             console.warn('No invoiceId found in payment intent metadata');
@@ -376,7 +384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Ensure we have a complete URL for the redirect
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/create-invoice/${invoice.id}`, baseUrl).toString();
+      const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
       console.log('Creating new payment link with redirect URL:', redirectUrl);
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
@@ -504,7 +512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/create-invoice/${invoice.id}`, baseUrl).toString();
+      const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
 
       console.log('Creating new payment link with redirect URL:', redirectUrl);
 
