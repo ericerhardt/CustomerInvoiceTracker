@@ -69,20 +69,23 @@ export default function ThankYou() {
             {data.customer.phone && <p>Phone: {data.customer.phone}</p>}
           </div>
 
-          {data.stripeReceiptUrl && (
-            <div className="mt-6 text-center">
+          <div className="mt-6 text-center">
+            {data.stripeReceiptUrl ? (
               <a 
                 href={data.stripeReceiptUrl} 
                 target="_blank" 
                 rel="noopener noreferrer"
+                className="inline-block"
               >
-                <Button>
-                  <Receipt className="mr-2 h-4 w-4" />
+                <Button className="w-full sm:w-auto" variant="default">
+                  <Receipt className="mr-2 h-5 w-5" />
                   View Receipt
                 </Button>
               </a>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-gray-500">Receipt processing, please check your email.</p>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
