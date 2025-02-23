@@ -13,11 +13,6 @@ import { users } from "@shared/schema";
 import { db } from "./db";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Configure raw body handler for webhook before auth setup
-  app.use('/webhook', express.raw({ type: 'application/json' }));
-
-  setupAuth(app);
-
   // Initialize Stripe with empty config - will be updated when needed
   let stripe: Stripe | null = null;
 
@@ -39,14 +34,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return stripe;
   }
 
-  app.post("/webhook", async (req, res) => {
+  // Configure webhook route with raw body handling
+  const webhookMiddleware = express.raw({ type: 'application/json' });
+  app.post("/webhook", webhookMiddleware, async (req, res) => {
     const sig = req.headers['stripe-signature'];
     console.log('Received Stripe webhook request:', {
       method: req.method,
       path: req.path,
       signature: sig ? 'Present' : 'Missing',
       body: req.body ? 'Present' : 'Missing',
-      bodyType: typeof req.body
+      bodyType: typeof req.body,
+      isBuffer: Buffer.isBuffer(req.body)
     });
 
     if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -132,6 +130,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(400).send(`Webhook Error: ${error.message}`);
     }
   });
+
+  // Setup auth after webhook route
+  setupAuth(app);
 
   // Customers
   app.get("/api/customers", async (req, res) => {
