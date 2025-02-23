@@ -37,25 +37,21 @@ export async function sendInvoiceEmail({
   }).format(new Date(dueDate));
 
   try {
-    // Get settings from database first
+    // Get settings from database
     const settings = await storage.getSettingsByUserId(userId);
-
-    // Use API key from settings or environment variable
-    const apiKey = settings?.sendGridApiKey || process.env.SENDGRID_API_KEY;
-    const fromEmail = settings?.sendGridFromEmail || process.env.SENDGRID_FROM_EMAIL;
-    const companyName = settings?.companyName || 'Invoice System';
-
-    if (!apiKey) {
-      throw new Error('SendGrid API key not configured');
+    if (!settings?.sendGridApiKey) {
+      throw new Error('SendGrid API key not configured in settings');
+    }
+    if (!settings?.sendGridFromEmail) {
+      throw new Error('SendGrid sender email not configured in settings');
+    }
+    if (!settings.sendGridApiKey.startsWith('SG.')) {
+      throw new Error('Invalid SendGrid API key format in settings. Must start with "SG."');
     }
 
-    if (!fromEmail) {
-      throw new Error('SendGrid sender email not configured');
-    }
-
-    if (!apiKey.startsWith('SG.')) {
-      throw new Error('Invalid SendGrid API key format. Must start with "SG."');
-    }
+    const apiKey = settings.sendGridApiKey;
+    const fromEmail = settings.sendGridFromEmail;
+    const companyName = settings.companyName || 'Invoice System';
 
     console.log('Configuring SendGrid with API key and attempting to send to:', to);
     sgMail.setApiKey(apiKey);
@@ -108,10 +104,10 @@ export async function sendInvoiceEmail({
     if (error instanceof Error) {
       console.error('SendGrid Error Details:', error.message);
       if (error.message.includes('authorization') || error.message.includes('forbidden')) {
-        throw new Error('SendGrid API key is invalid or has insufficient permissions');
+        throw new Error('SendGrid API key in settings is invalid or has insufficient permissions');
       }
       if (error.message.includes('verified Sender Identity')) {
-        throw new Error('Email sender not verified with SendGrid. Please verify your sender email.');
+        throw new Error('Email sender in settings not verified with SendGrid. Please verify your sender email.');
       }
     }
     throw new Error('Failed to send invoice email');
@@ -127,24 +123,20 @@ export async function sendPasswordResetEmail({
   try {
     console.log('Starting password reset email process for:', to);
 
-    // Get settings from database first
+    // Get settings from database
     const settings = await storage.getSettingsByUserId(userId);
-
-    // Determine API key and sender email with fallback to environment variables
-    const apiKey = settings?.sendGridApiKey || process.env.SENDGRID_API_KEY;
-    const fromEmail = settings?.sendGridFromEmail || process.env.SENDGRID_FROM_EMAIL;
-
-    if (!apiKey) {
-      throw new Error('SendGrid API key not configured');
+    if (!settings?.sendGridApiKey) {
+      throw new Error('SendGrid API key not configured in settings');
+    }
+    if (!settings?.sendGridFromEmail) {
+      throw new Error('SendGrid sender email not configured in settings');
+    }
+    if (!settings.sendGridApiKey.startsWith('SG.')) {
+      throw new Error('Invalid SendGrid API key format in settings. Must start with "SG."');
     }
 
-    if (!fromEmail) {
-      throw new Error('SendGrid sender email not configured');
-    }
-
-    if (!apiKey.startsWith('SG.')) {
-      throw new Error('Invalid SendGrid API key format. Must start with "SG."');
-    }
+    const apiKey = settings.sendGridApiKey;
+    const fromEmail = settings.sendGridFromEmail;
 
     console.log('Configuring SendGrid with API key...');
     sgMail.setApiKey(apiKey);
@@ -190,10 +182,10 @@ export async function sendPasswordResetEmail({
     if (error instanceof Error) {
       console.error('SendGrid Error Details:', error.message);
       if (error.message.includes('authorization') || error.message.includes('forbidden')) {
-        throw new Error('SendGrid API key is invalid or has insufficient permissions');
+        throw new Error('SendGrid API key in settings is invalid or has insufficient permissions');
       }
       if (error.message.includes('verified Sender Identity')) {
-        throw new Error('Email sender not verified with SendGrid. Please verify your sender email.');
+        throw new Error('Email sender in settings not verified with SendGrid. Please verify your sender email.');
       }
     }
     throw new Error('Failed to send password reset email');

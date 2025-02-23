@@ -55,19 +55,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bodyLength: req.body ? req.body.length : 0
       });
 
-      if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
-        console.error('Missing webhook requirements:', {
-          signature: !!sig,
-          secret: !!process.env.STRIPE_WEBHOOK_SECRET
-        });
-        return res.status(400).send('Webhook signature or secret missing');
+      if (!sig) {
+        console.error('Missing webhook signature');
+        return res.status(400).send('Webhook signature missing');
       }
-
 
       // Get settings from first user (webhook doesn't have user context)
       const [firstUser] = await db.select().from(users).limit(1);
       if (!firstUser) {
         throw new Error('No users found to get Stripe settings');
+      }
+
+      const settings = await storage.getSettingsByUserId(firstUser.id);
+      if (!settings?.stripeWebhookSecret) {
+        throw new Error('Stripe webhook secret not configured in settings');
       }
 
       const stripeInstance = await getStripe(firstUser.id);
@@ -77,7 +78,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         event = stripeInstance.webhooks.constructEvent(
           req.body,
           sig,
-          process.env.STRIPE_WEBHOOK_SECRET
+          settings.stripeWebhookSecret
         );
 
         console.log('Successfully constructed webhook event:', {
@@ -336,25 +337,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get customer and settings for PDF generation
       const customer = await storage.getCustomer(invoice.customerId);
       const settings = await storage.getSettingsByUserId(req.user.id);
+
+      // Generate PDF
       let pdfBuffer: Buffer | undefined;
+      try {
+        pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
+        console.log('Generated PDF buffer:', !!pdfBuffer);
+      } catch (pdfError) {
+        console.error('Failed to generate PDF:', pdfError);
+      }
 
-      pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
-
-
-      // Send email to customer using settings
+      // Send email to customer if settings are configured
       if (customer && settings?.sendGridApiKey) {
-        if (!settings.sendGridApiKey.startsWith('SG.')) {
-          throw new Error('Invalid SendGrid API key format');
+        try {
+          await sendInvoiceEmail({
+            to: customer.email,
+            invoiceNumber: invoice.number,
+            amount: Number(invoice.amount),
+            dueDate: invoice.dueDate,
+            paymentUrl: paymentLink.url,
+            pdfBuffer,
+            userId: req.user.id
+          });
+        } catch (emailError) {
+          console.error('Failed to send invoice email:', emailError);
+          return res.status(200).json({
+            ...updatedInvoice,
+            emailError: emailError instanceof Error ? emailError.message : 'Unknown email error'
+          });
         }
-        await sendInvoiceEmail({
-          to: customer.email,
-          invoiceNumber: invoice.number,
-          amount: Number(invoice.amount),
-          dueDate: invoice.dueDate,
-          paymentUrl: paymentLink.url,
-          pdfBuffer,
-          userId: req.user.id
-        });
       }
 
       res.status(201).json(updatedInvoice);
@@ -362,11 +373,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Invoice creation failed:', error);
       res.status(500).json({
         message: 'Failed to create invoice',
-        error: (error as Error).message
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
 
+  // Update resend invoice endpoint to use settings consistently
   app.post("/api/invoices/:id/resend", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
 
@@ -411,11 +423,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('Deactivated old payment link:', invoice.stripePaymentId);
         } catch (stripeError) {
           console.error('Failed to deactivate old payment link:', stripeError);
-          // Continue with creating new link even if deactivation fails
         }
       }
 
-      // Create new Stripe payment link
+      // Create new payment link
       const price = await stripeInstance.prices.create({
         currency: 'usd',
         unit_amount: Math.round(Number(invoice.amount) * 100),
@@ -427,7 +438,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
 
-      // Ensure we have a complete URL for the redirect
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
       const redirectUrl = new URL(`/invoice/${invoice.id}`, baseUrl).toString();
 
@@ -456,16 +466,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         paymentLink.url
       );
 
+      // Generate PDF
       let pdfBuffer: Buffer | undefined;
       try {
         pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
         console.log('Generated PDF buffer:', !!pdfBuffer);
       } catch (pdfError) {
         console.error('Failed to generate PDF:', pdfError);
-        // Continue without PDF if generation fails
       }
 
-      // Send email with PDF attachment
+      // Send email
       if (settings?.sendGridApiKey) {
         console.log('Attempting to send invoice email to:', customer.email);
         try {
