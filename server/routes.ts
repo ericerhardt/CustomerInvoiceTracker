@@ -371,9 +371,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) return res.sendStatus(401);
 
     try {
+      console.log('Processing resend invoice request:', {
+        invoiceId: req.params.id,
+        userId: req.user.id
+      });
+
       const stripeInstance = await getStripe(req.user.id);
       const invoice = await storage.getInvoice(parseInt(req.params.id));
-      if (!invoice) return res.sendStatus(404);
+      if (!invoice) {
+        console.error('Invoice not found:', req.params.id);
+        return res.sendStatus(404);
+      }
       if (invoice.userId !== req.user.id) return res.sendStatus(403);
 
       // Get invoice items and customer
@@ -382,8 +390,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const settings = await storage.getSettingsByUserId(req.user.id);
 
       if (!customer) {
+        console.error('Customer not found for invoice:', invoice.id);
         throw new Error('Customer not found');
       }
+
+      console.log('Retrieved customer and settings:', {
+        customerId: customer.id,
+        hasSettings: !!settings
+      });
 
       // Deactivate old payment link if it exists
       if (invoice.stripePaymentId) {
@@ -391,6 +405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await stripeInstance.paymentLinks.update(invoice.stripePaymentId, {
             active: false
           });
+          console.log('Deactivated old payment link:', invoice.stripePaymentId);
         } catch (stripeError) {
           console.error('Failed to deactivate old payment link:', stripeError);
           // Continue with creating new link even if deactivation fails
@@ -413,6 +428,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
       const redirectUrl = new URL(`/invoice/${invoice.id}`, baseUrl).toString();
 
+      console.log('Creating new payment link with redirect URL:', redirectUrl);
+
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
           price: price.id,
@@ -427,6 +444,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
+      console.log('Created new payment link:', paymentLink.url);
+
       // Update invoice with new payment link
       const updatedInvoice = await storage.updateInvoicePayment(
         invoice.id,
@@ -435,24 +454,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       let pdfBuffer: Buffer | undefined;
-      pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
+      try {
+        pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
+        console.log('Generated PDF buffer:', !!pdfBuffer);
+      } catch (pdfError) {
+        console.error('Failed to generate PDF:', pdfError);
+        // Continue without PDF if generation fails
+      }
 
       // Send email with PDF attachment
       if (settings?.sendGridApiKey) {
+        console.log('Attempting to send invoice email to:', customer.email);
         if (!settings.sendGridApiKey.startsWith('SG.')) {
           throw new Error('Invalid SendGrid API key format. Must start with "SG."');
         }
 
         process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
-        await sendInvoiceEmail({
-          to: customer.email,
-          invoiceNumber: invoice.number,
-          amount: Number(invoice.amount),
-          dueDate: invoice.dueDate,
-          paymentUrl: paymentLink.url,
-          pdfBuffer,
-          userId: req.user.id
-        });
+        try {
+          await sendInvoiceEmail({
+            to: customer.email,
+            invoiceNumber: invoice.number,
+            amount: Number(invoice.amount),
+            dueDate: invoice.dueDate,
+            paymentUrl: paymentLink.url,
+            pdfBuffer,
+            userId: req.user.id
+          });
+          console.log('Successfully sent invoice email');
+        } catch (emailError) {
+          console.error('Failed to send invoice email:', emailError);
+          // Don't throw here, we want to return the updated invoice even if email fails
+        }
+      } else {
+        console.log('SendGrid API key not configured, skipping email send');
       }
 
       res.json(updatedInvoice);
@@ -460,7 +494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Failed to resend invoice:', error);
       res.status(500).json({
         message: 'Failed to resend invoice',
-        error: (error as Error).message
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   });
