@@ -18,6 +18,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize Stripe with empty config - will be updated when needed
   let stripe: Stripe | null = null;
 
+  // Configure raw body handler for webhook before other middleware
+  app.post("/webhook", 
+    express.raw({ type: 'application/json' }), 
+    async (req, res) => {
+      const sig = req.headers['stripe-signature'];
+      console.log('Received Stripe webhook request:', {
+        method: req.method,
+        path: req.path,
+        signature: sig ? 'Present' : 'Missing',
+        body: req.body ? 'Present' : 'Missing'
+      });
+
+      if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+        console.error('Webhook signature or secret missing', {
+          signature: sig ? 'Present' : 'Missing',
+          secret: process.env.STRIPE_WEBHOOK_SECRET ? 'Present' : 'Missing'
+        });
+        return res.status(400).send('Webhook signature or secret missing');
+      }
+
+      let event;
+      try {
+        // Get settings from first user (webhook doesn't have user context)
+        const [firstUser] = await db.select().from(users).limit(1);
+        if (!firstUser) {
+          throw new Error('No users found to get Stripe settings');
+        }
+
+        const stripeInstance = await getStripe(firstUser.id);
+
+        console.log('Validating webhook signature...');
+        event = stripeInstance.webhooks.constructEvent(
+          req.body,
+          sig,
+          process.env.STRIPE_WEBHOOK_SECRET
+        );
+
+        console.log('Webhook event validated:', {
+          type: event.type,
+          id: event.id,
+          created: new Date(event.created * 1000).toISOString()
+        });
+
+        // Handle payment events
+        switch (event.type) {
+          case 'checkout.session.completed': {
+            const session = event.data.object as Stripe.Checkout.Session;
+            console.log('Processing completed checkout session:', {
+              sessionId: session.id,
+              metadata: session.metadata
+            });
+
+            const invoiceId = session.metadata?.invoiceId;
+            if (invoiceId) {
+              console.log(`Updating invoice ${invoiceId} status to paid`);
+              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Successfully updated invoice ${invoiceId} status to paid`);
+            }
+            break;
+          }
+          case 'payment_intent.succeeded': {
+            const paymentIntent = event.data.object as Stripe.PaymentIntent;
+            console.log('Processing successful payment:', {
+              paymentIntentId: paymentIntent.id,
+              amount: paymentIntent.amount,
+              currency: paymentIntent.currency,
+              status: paymentIntent.status,
+              metadata: paymentIntent.metadata
+            });
+
+            const invoiceId = paymentIntent.metadata?.invoiceId;
+            if (invoiceId) {
+              console.log(`Updating invoice ${invoiceId} status to paid`);
+              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Successfully updated invoice ${invoiceId} status to paid`);
+            }
+            break;
+          }
+          default: {
+            console.log('Unhandled event type:', event.type);
+          }
+        }
+
+        console.log('Webhook processing completed successfully');
+        res.json({ received: true });
+      } catch (err) {
+        const error = err as Error;
+        console.error('Webhook Error:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+        return res.status(400).send(`Webhook Error: ${error.message}`);
+      }
+    }
+  );
+
   // Helper function to get or create Stripe instance
   async function getStripe(userId: number) {
     const settings = await storage.getSettingsByUserId(userId);
@@ -405,129 +502,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/webhook",
-    express.raw({ type: 'application/json' }),
-    async (req, res) => {
-      const sig = req.headers['stripe-signature'];
-      console.log('Received Stripe webhook request:', {
-        method: req.method,
-        path: req.path,
-        signature: sig ? 'Present' : 'Missing',
-        body: req.body ? 'Present' : 'Missing'
-      });
-
-      if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
-        console.error('Webhook signature or secret missing', {
-          signature: sig ? 'Present' : 'Missing',
-          secret: process.env.STRIPE_WEBHOOK_SECRET ? 'Present' : 'Missing'
-        });
-        return res.status(400).send('Webhook signature or secret missing');
-      }
-
-      let event;
-      try {
-        // Get settings from first user (webhook doesn't have user context)
-        const [firstUser] = await db.select().from(users).limit(1);
-        if (!firstUser) {
-          throw new Error('No users found to get Stripe settings');
-        }
-
-        const stripeInstance = await getStripe(firstUser.id);
-
-        console.log('Validating webhook signature...');
-        event = stripeInstance.webhooks.constructEvent(
-          req.body,
-          sig,
-          process.env.STRIPE_WEBHOOK_SECRET
-        );
-
-        console.log('Webhook event validated:', {
-          type: event.type,
-          id: event.id,
-          created: new Date(event.created * 1000).toISOString()
-        });
-
-        // Handle payment events
-        switch (event.type) {
-          case 'checkout.session.completed': {
-            const session = event.data.object as Stripe.Checkout.Session;
-            console.log('Processing completed checkout session:', {
-              sessionId: session.id,
-              metadata: session.metadata
-            });
-
-            const invoiceId = session.metadata?.invoiceId;
-            if (invoiceId) {
-              console.log(`Updating invoice ${invoiceId} status to paid`);
-              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-              console.log(`Successfully updated invoice ${invoiceId} status to paid`);
-            }
-            break;
-          }
-          case 'payment_intent.succeeded': {
-            const paymentIntent = event.data.object as Stripe.PaymentIntent;
-            console.log('Processing successful payment:', {
-              paymentIntentId: paymentIntent.id,
-              amount: paymentIntent.amount,
-              currency: paymentIntent.currency,
-              status: paymentIntent.status,
-              metadata: paymentIntent.metadata
-            });
-
-            const invoiceId = paymentIntent.metadata?.invoiceId;
-            if (invoiceId) {
-              console.log(`Updating invoice ${invoiceId} status to paid`);
-              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-              console.log(`Successfully updated invoice ${invoiceId} status to paid`);
-            }
-            break;
-          }
-          default: {
-            console.log('Unhandled event type:', event.type);
-          }
-        }
-
-        console.log('Webhook processing completed successfully');
-        res.json({ received: true });
-      } catch (err) {
-        const error = err as Error;
-        console.error('Webhook Error:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-        return res.status(400).send(`Webhook Error: ${error.message}`);
-      }
-    }
-  );
-
-  // Helper function for generating PDF
-  async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
-    try {
-      const pdfDocument = React.createElement(InvoicePDF, {
-        items: items.map(item => ({
-          description: item.description,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice)
-        })),
-        customer,
-        dueDate: invoice.dueDate.toISOString(),
-        invoiceNumber: invoice.number,
-        settings: settings ? {
-          companyName: settings.companyName || '',
-          companyAddress: settings.companyAddress || '',
-          companyEmail: settings.companyEmail || '',
-          taxRate: Number(settings.taxRate),
-        } : undefined
-      });
-
-      return await renderToBuffer(pdfDocument);
-    } catch (error) {
-      console.error('Failed to generate PDF:', error);
-      return undefined;
-    }
-  }
-
 
   // Settings endpoints
   app.get("/api/settings", async (req, res) => {
@@ -586,4 +560,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
   return httpServer;
+}
+
+// Helper function for generating PDF
+async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
+  try {
+    const pdfDocument = React.createElement(InvoicePDF, {
+      items: items.map(item => ({
+        description: item.description,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.unitPrice)
+      })),
+      customer,
+      dueDate: invoice.dueDate.toISOString(),
+      invoiceNumber: invoice.number,
+      settings: settings ? {
+        companyName: settings.companyName || '',
+        companyAddress: settings.companyAddress || '',
+        companyEmail: settings.companyEmail || '',
+        taxRate: Number(settings.taxRate),
+      } : undefined
+    });
+
+    return await renderToBuffer(pdfDocument);
+  } catch (error) {
+    console.error('Failed to generate PDF:', error);
+    return undefined;
+  }
 }
