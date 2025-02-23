@@ -74,15 +74,24 @@ async function startServer() {
     // Check if port is available
     const isPortAvailable = await checkPort(PORT);
     if (!isPortAvailable) {
-      console.log(`Port ${PORT} is in use. Attempting to terminate existing process...`);
+      console.log(`Port ${PORT} is in use. Attempting to terminate existing Node.js process...`);
       try {
-        // On Unix systems, this will attempt to kill the process using port 5000
+        // First try to find and kill Node.js processes specifically
         await new Promise((resolve) => {
-          exec(`lsof -i :${PORT} -t | xargs kill -9`, (error: any) => {
+          exec(`pgrep -f "node.*:${PORT}" | xargs -r kill -9`, (error: any) => {
             if (error) {
-              console.log('Could not terminate existing process, but continuing anyway...');
+              console.log('Could not find Node.js process, trying generic port kill...');
+              // Fallback to any process using the port
+              exec(`lsof -i :${PORT} -t | xargs -r kill -9`, (error: any) => {
+                if (error) {
+                  console.log('Could not terminate existing process, but continuing anyway...');
+                }
+                resolve(true);
+              });
+            } else {
+              console.log('Successfully terminated Node.js process');
+              resolve(true);
             }
-            resolve(true);
           });
         });
         // Wait a moment for the port to be released
