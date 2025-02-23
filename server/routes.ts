@@ -10,6 +10,7 @@ import type { InvoiceItem } from "@shared/schema";
 import express from "express";
 import { users } from "@shared/schema";
 import { db } from "./db";
+import { sendInvoiceEmail } from "./email";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize Stripe with empty config - will be updated when needed
@@ -396,7 +397,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('Retrieved customer and settings:', {
         customerId: customer.id,
-        hasSettings: !!settings
+        hasSettings: !!settings,
+        customerEmail: customer.email,
+        hasStripeKey: !!settings?.stripeSecretKey,
+        hasSendGridKey: !!settings?.sendGridApiKey
       });
 
       // Deactivate old payment link if it exists
@@ -465,11 +469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send email with PDF attachment
       if (settings?.sendGridApiKey) {
         console.log('Attempting to send invoice email to:', customer.email);
-        if (!settings.sendGridApiKey.startsWith('SG.')) {
-          throw new Error('Invalid SendGrid API key format. Must start with "SG."');
-        }
 
-        process.env.SENDGRID_API_KEY = settings.sendGridApiKey;
         try {
           await sendInvoiceEmail({
             to: customer.email,
@@ -483,10 +483,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('Successfully sent invoice email');
         } catch (emailError) {
           console.error('Failed to send invoice email:', emailError);
-          // Don't throw here, we want to return the updated invoice even if email fails
+          // Include error details in the response but don't throw
+          return res.status(200).json({
+            ...updatedInvoice,
+            emailError: emailError instanceof Error ? emailError.message : 'Unknown email error'
+          });
         }
       } else {
         console.log('SendGrid API key not configured, skipping email send');
+        return res.status(200).json({
+          ...updatedInvoice,
+          emailError: 'SendGrid API key not configured'
+        });
       }
 
       res.json(updatedInvoice);
