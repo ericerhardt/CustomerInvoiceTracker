@@ -34,92 +34,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return stripe;
   }
 
-  // Configure webhook endpoint before any other middleware
-  const webhookPath = '/webhook';
-  app.post(
-    webhookPath,
-    express.raw({ type: 'application/json' }), // This must be before any other body parsers
-    async (req, res) => {
-      const sig = req.headers['stripe-signature'];
+  // Create a separate router for the webhook endpoint
+  const webhookRouter = express.Router();
+  webhookRouter.use(express.raw({ type: 'application/json' }));
 
-      // Enhanced logging
-      console.log('Webhook request details:', {
-        method: req.method,
-        path: req.path,
-        signature: sig ? 'Present' : 'Missing',
-        bodyType: typeof req.body,
-        isBuffer: Buffer.isBuffer(req.body),
-        bodyLength: req.body ? req.body.length : 0,
-        contentType: req.headers['content-type']
+  webhookRouter.post("/", async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+
+    // Enhanced logging
+    console.log('Webhook request details:', {
+      method: req.method,
+      path: req.path,
+      signature: sig ? 'Present' : 'Missing',
+      bodyType: typeof req.body,
+      isBuffer: Buffer.isBuffer(req.body),
+      bodyLength: req.body ? req.body.length : 0,
+      contentType: req.headers['content-type'],
+      rawBody: req.body ? req.body.toString('hex').slice(0, 20) + '...' : 'No body'
+    });
+
+    if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
+      console.error('Missing webhook requirements:', {
+        signature: !!sig,
+        secret: !!process.env.STRIPE_WEBHOOK_SECRET
+      });
+      return res.status(400).send('Webhook signature or secret missing');
+    }
+
+    let event;
+    try {
+      // Get settings from first user (webhook doesn't have user context)
+      const [firstUser] = await db.select().from(users).limit(1);
+      if (!firstUser) {
+        throw new Error('No users found to get Stripe settings');
+      }
+
+      const stripeInstance = await getStripe(firstUser.id);
+
+      // Verify webhook signature
+      console.log('Attempting webhook signature verification...');
+      event = stripeInstance.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+
+      console.log('Webhook event successfully constructed:', {
+        type: event.type,
+        id: event.id
       });
 
-      if (!sig || !process.env.STRIPE_WEBHOOK_SECRET) {
-        console.error('Missing webhook requirements:', {
-          signature: !!sig,
-          secret: !!process.env.STRIPE_WEBHOOK_SECRET
-        });
-        return res.status(400).send('Webhook signature or secret missing');
+      // Handle the event
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const invoiceId = session.metadata?.invoiceId;
+          if (invoiceId) {
+            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+            console.log(`Updated invoice ${invoiceId} status to paid`);
+          }
+          break;
+        }
+        case 'payment_intent.succeeded': {
+          const paymentIntent = event.data.object as Stripe.PaymentIntent;
+          const invoiceId = paymentIntent.metadata?.invoiceId;
+          if (invoiceId) {
+            await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+            console.log(`Updated invoice ${invoiceId} status to paid`);
+          }
+          break;
+        }
+        default:
+          console.log(`Unhandled event type: ${event.type}`);
       }
 
-      let event;
-      try {
-        // Get settings from first user (webhook doesn't have user context)
-        const [firstUser] = await db.select().from(users).limit(1);
-        if (!firstUser) {
-          throw new Error('No users found to get Stripe settings');
-        }
-
-        const stripeInstance = await getStripe(firstUser.id);
-
-        // Verify webhook signature
-        console.log('Attempting webhook signature verification...');
-        event = stripeInstance.webhooks.constructEvent(
-          req.body,
-          sig,
-          process.env.STRIPE_WEBHOOK_SECRET
-        );
-
-        console.log('Webhook event successfully constructed:', {
-          type: event.type,
-          id: event.id
-        });
-
-        // Handle the event
-        switch (event.type) {
-          case 'checkout.session.completed': {
-            const session = event.data.object as Stripe.Checkout.Session;
-            const invoiceId = session.metadata?.invoiceId;
-            if (invoiceId) {
-              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-              console.log(`Updated invoice ${invoiceId} status to paid`);
-            }
-            break;
-          }
-          case 'payment_intent.succeeded': {
-            const paymentIntent = event.data.object as Stripe.PaymentIntent;
-            const invoiceId = paymentIntent.metadata?.invoiceId;
-            if (invoiceId) {
-              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-              console.log(`Updated invoice ${invoiceId} status to paid`);
-            }
-            break;
-          }
-          default:
-            console.log(`Unhandled event type: ${event.type}`);
-        }
-
-        res.json({ received: true });
-      } catch (err) {
-        const error = err as Error;
-        console.error('Webhook processing failed:', {
-          error: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-        return res.status(400).send(`Webhook Error: ${error.message}`);
-      }
+      res.json({ received: true });
+    } catch (err) {
+      const error = err as Error;
+      console.error('Webhook processing failed:', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      return res.status(400).send(`Webhook Error: ${error.message}`);
     }
-  );
+  });
+
+  // Mount webhook router before any other middleware
+  app.use('/webhook', webhookRouter);
 
   // Setup auth and other middleware after webhook route
   setupAuth(app);
