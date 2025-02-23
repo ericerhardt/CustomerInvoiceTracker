@@ -21,6 +21,14 @@ type AuthContextType = {
 type LoginData = Pick<InsertUser, "username" | "password">;
 
 export const AuthContext = createContext<AuthContextType | null>(null);
+
+// Helper function to clear non-user cached data
+const clearCachedData = () => {
+  // Invalidate specific endpoints to trigger refetch
+  queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+  queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const {
@@ -39,11 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
-      console.log('Login successful, invalidating queries...');
-      // Clear all existing queries before setting new user data
-      queryClient.clear();
+      console.log('Login successful, updating user data...');
+      // Set new user data first
       queryClient.setQueryData(["/api/user"], user);
-      console.log('Queries invalidated and user data set');
+      // Then clear other caches
+      clearCachedData();
+      console.log('User data updated and caches cleared');
     },
     onError: (error: Error) => {
       console.error('Login failed:', error);
@@ -61,11 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
-      console.log('Registration successful, invalidating queries...');
-      // Clear all existing queries before setting new user data
-      queryClient.clear();
+      console.log('Registration successful, updating user data...');
+      // Set new user data first
       queryClient.setQueryData(["/api/user"], user);
-      console.log('Queries invalidated and user data set');
+      // Then clear other caches
+      clearCachedData();
+      console.log('User data updated and caches cleared');
     },
     onError: (error: Error) => {
       console.error('Registration failed:', error);
@@ -106,11 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {
-      console.log('Logout successful, clearing all queries...');
-      // Clear all queries and cache on logout
-      queryClient.clear();
+      console.log('Logout successful, clearing user data...');
+      // Clear user data first
       queryClient.setQueryData(["/api/user"], null);
-      console.log('All queries cleared and user data reset');
+      // Then clear other caches
+      clearCachedData();
+      console.log('User data and caches cleared');
     },
     onError: (error: Error) => {
       console.error('Logout failed:', error);
