@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { EmailConfigWizard } from "@/components/email-config-wizard";
 
 const settingsSchema = z.object({
@@ -27,6 +27,9 @@ const settingsSchema = z.object({
   companyEmail: z.string().email("Invalid email address"),
   stripeSecretKey: z.string().min(1, "Stripe secret key is required"),
   stripePublicKey: z.string().min(1, "Stripe public key is required"),
+  stripeWebhookSecret: z.string().refine((val) => val?.startsWith('whsec_'), {
+    message: "Webhook secret must start with 'whsec_'"
+  }).optional(),
   taxRate: z.coerce
     .number()
     .min(0, "Tax rate cannot be negative")
@@ -39,6 +42,7 @@ type SettingsFormData = z.infer<typeof settingsSchema>;
 export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
 
   const { data: settings } = useQuery({
     queryKey: ["/api/settings"],
@@ -57,6 +61,7 @@ export default function Settings() {
       companyEmail: "",
       stripeSecretKey: "",
       stripePublicKey: "",
+      stripeWebhookSecret: "",
       taxRate: 10, // Default tax rate of 10%
     },
   });
@@ -69,6 +74,7 @@ export default function Settings() {
         companyEmail: settings.companyEmail || "",
         stripeSecretKey: settings.stripeSecretKey || "",
         stripePublicKey: settings.stripePublicKey || "",
+        stripeWebhookSecret: settings.stripeWebhookSecret || "",
         taxRate: Number(settings.taxRate) || 10,
       });
     }
@@ -173,11 +179,11 @@ export default function Settings() {
                         <FormItem>
                           <FormLabel>Tax Rate (%)</FormLabel>
                           <FormControl>
-                            <Input 
-                              type="number" 
-                              min="0" 
-                              max="100" 
-                              step="0.01" 
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
                               {...field}
                               onChange={(e) => field.onChange(Number(e.target.value))}
                             />
@@ -218,6 +224,38 @@ export default function Settings() {
                           </FormControl>
                           <FormDescription>
                             Your Stripe public key (starts with "pk_")
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="stripeWebhookSecret"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Stripe Webhook Secret</FormLabel>
+                          <div className="relative">
+                            <FormControl>
+                              <Input
+                                type={showWebhookSecret ? "text" : "password"}
+                                {...field}
+                                value={field.value || ""}
+                              />
+                            </FormControl>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-2 top-1/2 -translate-y-1/2"
+                              onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                            >
+                              {showWebhookSecret ? "Hide" : "Show"}
+                            </Button>
+                          </div>
+                          <FormDescription>
+                            Your Stripe webhook secret (starts with "whsec_")
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
