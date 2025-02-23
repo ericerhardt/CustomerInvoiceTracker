@@ -21,6 +21,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize Stripe with empty config - will be updated when needed
   let stripe: Stripe | null = null;
 
+  // Helper function to get or create Stripe instance
+  async function getStripe(userId: number) {
+    const settings = await storage.getSettingsByUserId(userId);
+    if (!settings?.stripeSecretKey) {
+      throw new Error("Stripe secret key not configured. Please add it in settings.");
+    }
+
+    if (!settings.stripeSecretKey.startsWith('sk_')) {
+      throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
+    }
+
+    stripe = new Stripe(settings.stripeSecretKey, {
+      apiVersion: '2022-11-15',
+    });
+
+    return stripe;
+  }
+
   app.post("/webhook", async (req, res) => {
     const sig = req.headers['stripe-signature'];
     console.log('Received Stripe webhook request:', {
