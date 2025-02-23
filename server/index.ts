@@ -2,6 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { verifyDatabaseConnection } from "./db";
+import { exec } from "child_process";
+import net from "net";
 
 const app = express();
 
@@ -51,7 +53,6 @@ const errorHandler = (err: any, _req: Request, res: Response, _next: NextFunctio
 
 async function checkPort(port: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const net = require('net');
     const tester = net.createServer()
       .once('error', () => {
         resolve(false);
@@ -76,8 +77,7 @@ async function startServer() {
       console.log(`Port ${PORT} is in use. Attempting to terminate existing process...`);
       try {
         // On Unix systems, this will attempt to kill the process using port 5000
-        await new Promise((resolve, reject) => {
-          const { exec } = require('child_process');
+        await new Promise((resolve) => {
           exec(`lsof -i :${PORT} -t | xargs kill -9`, (error: any) => {
             if (error) {
               console.log('Could not terminate existing process, but continuing anyway...');
