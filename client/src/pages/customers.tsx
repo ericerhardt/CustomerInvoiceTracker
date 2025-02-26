@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -30,23 +31,72 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { PlusCircle, Trash2, Edit, Loader2 } from "lucide-react";
-import { Customer, insertCustomerSchema } from "@shared/schema";
+import { PlusCircle, Trash2, Edit, Loader2, Search, ArrowUpDown } from "lucide-react";
+import { Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { CustomerForm } from "@/components/customer-form";
 
 const ITEMS_PER_PAGE = 10;
 
+type SortField = "name" | "email" | "phone" | "address";
+type SortOrder = "asc" | "desc";
+
 export default function CustomersPage() {
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const { data: customers, isLoading } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
   });
+
+  // Filter and sort customers
+  const filteredAndSortedCustomers = useMemo(() => {
+    if (!customers) return [];
+
+    let filtered = customers;
+
+    // Apply search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter((customer) => {
+        return (
+          customer.name.toLowerCase().includes(searchLower) ||
+          customer.email.toLowerCase().includes(searchLower) ||
+          (customer.phone && customer.phone.toLowerCase().includes(searchLower)) ||
+          customer.address.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+
+    // Apply sorting
+    return [...filtered].sort((a, b) => {
+      const multiplier = sortOrder === "asc" ? 1 : -1;
+      const valueA = (a[sortField] || "").toLowerCase();
+      const valueB = (b[sortField] || "").toLowerCase();
+      return valueA.localeCompare(valueB) * multiplier;
+    });
+  }, [customers, searchTerm, sortField, sortOrder]);
+
+  const totalPages = Math.ceil((filteredAndSortedCustomers?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedCustomers = filteredAndSortedCustomers.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
 
   const deleteCustomer = useMutation({
     mutationFn: async (customerId: number) => {
@@ -80,12 +130,6 @@ export default function CustomersPage() {
       // Error is already handled in the mutation
     }
   };
-
-  const totalPages = Math.ceil((customers?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedCustomers = customers?.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
 
   if (isLoading) {
     return (
@@ -125,7 +169,7 @@ export default function CustomersPage() {
                 customer={selectedCustomer}
                 onSuccess={() => {
                   setIsFormOpen(false);
-                  setSelectedCustomer(null);
+                  setSelectedCustomer(undefined);
                 }}
               />
             </DialogContent>
@@ -134,21 +178,71 @@ export default function CustomersPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Customer List</CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle>Customer List</CardTitle>
+              <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search customers..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-8"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Address</TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleSort("name")}
+                      className="flex items-center gap-2"
+                    >
+                      Name
+                      <ArrowUpDown className="h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleSort("email")}
+                      className="flex items-center gap-2"
+                    >
+                      Email
+                      <ArrowUpDown className="h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleSort("phone")}
+                      className="flex items-center gap-2"
+                    >
+                      Phone
+                      <ArrowUpDown className="h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleSort("address")}
+                      className="flex items-center gap-2"
+                    >
+                      Address
+                      <ArrowUpDown className="h-4 w-4" />
+                    </Button>
+                  </TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedCustomers?.map((customer) => (
+                {paginatedCustomers.map((customer) => (
                   <TableRow key={customer.id}>
                     <TableCell>{customer.name}</TableCell>
                     <TableCell>{customer.email}</TableCell>
