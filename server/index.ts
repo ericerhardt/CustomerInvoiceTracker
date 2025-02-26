@@ -108,7 +108,7 @@ async function checkPort(port: number): Promise<boolean> {
 // Initialize server with proper error handling
 async function startServer() {
   try {
-    const PORT = 5001; // Temporarily changed for testing
+    const PORT = 5000; // Changed from 5001 to 5000
     const RETRY_DELAY = 3000; // 3 seconds delay
     const MAX_RETRIES = 5;
     const KILL_ATTEMPTS = 3;

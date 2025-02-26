@@ -42,6 +42,15 @@ export default function Dashboard() {
     queryKey: ["/api/customers"],
   });
 
+  // Filter out paid invoices
+  const unpaidInvoices = invoices?.filter(invoice => invoice.status !== "paid") || [];
+
+  const totalPages = Math.ceil(unpaidInvoices.length / ITEMS_PER_PAGE);
+  const paginatedInvoices = unpaidInvoices.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const deleteInvoice = useMutation({
     mutationFn: async (invoiceId: number) => {
       const res = await apiRequest("DELETE", `/api/invoices/${invoiceId}`);
@@ -117,12 +126,6 @@ export default function Dashboard() {
     },
   });
 
-  const totalPages = Math.ceil((invoices?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedInvoices = invoices?.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
-
   const handleDelete = async (invoiceId: number) => {
     try {
       await deleteInvoice.mutateAsync(invoiceId);
@@ -180,7 +183,7 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Recent Invoices</CardTitle>
+            <CardTitle>Pending Invoices</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -195,7 +198,7 @@ export default function Dashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedInvoices?.map((invoice) => {
+                {paginatedInvoices.map((invoice) => {
                   const customer = customers?.find((c) => c.id === invoice.customerId);
                   const isResending = invoice.isResending;
                   return (
@@ -212,9 +215,7 @@ export default function Dashboard() {
                       <TableCell>
                         <span
                           className={`px-2 py-1 rounded-full text-xs ${
-                            invoice.status === "paid"
-                              ? "bg-green-100 text-green-800"
-                              : invoice.status === "failed"
+                            invoice.status === "failed"
                               ? "bg-red-100 text-red-800"
                               : "bg-yellow-100 text-yellow-800"
                           }`}
@@ -227,53 +228,49 @@ export default function Dashboard() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          {invoice.status !== "paid" && (
-                            <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => resendPaymentLink.mutate(invoice.id)}
+                            disabled={isResending || resendPaymentLink.isPending}
+                          >
+                            {isResending ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            ) : (
+                              <Send className="h-4 w-4 mr-1" />
+                            )}
+                            {isResending ? "Sending..." : "Resend"}
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => resendPaymentLink.mutate(invoice.id)}
-                                disabled={isResending || resendPaymentLink.isPending}
+                                className="text-red-600 hover:text-red-700"
+                                disabled={isResending}
                               >
-                                {isResending ? (
-                                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                                ) : (
-                                  <Send className="h-4 w-4 mr-1" />
-                                )}
-                                {isResending ? "Sending..." : "Resend"}
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Delete
                               </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-red-600 hover:text-red-700"
-                                    disabled={isResending}
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-1" />
-                                    Delete
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete Payment Link</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete this payment link? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDelete(invoice.id)}
-                                      className="bg-red-600 hover:bg-red-700"
-                                    >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </>
-                          )}
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Payment Link</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this payment link? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(invoice.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </TableCell>
                     </TableRow>

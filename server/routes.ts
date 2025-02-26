@@ -89,15 +89,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         return res.status(400).send(`Webhook signature verification failed`);
       }
-        
-      
-       
+
       switch (event.type) {
-        
         case 'checkout.session.completed': {
           const session = event.data.object as Stripe.Checkout.Session;
-          const invoiceId =  session.metadata?.invoiceId;
-             
+          const invoiceId = session.metadata?.invoiceId;
+
           console.log('Processing checkout.session.completed:', {
             sessionId: session.id,
             invoiceId,
@@ -106,10 +103,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (invoiceId) {
             try {
-              
-             // await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
-              console.log(`Successfully updated invoice ${invoiceId} status to paid (via checkout)`); 
-              
+              // await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Successfully updated invoice ${invoiceId} status to paid (via checkout)`);
             } catch (updateError) {
               console.error(`Failed to update invoice ${invoiceId} status:`, updateError);
               throw updateError; // Re-throw to trigger error handling
@@ -119,42 +114,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           break;
         }
-          case 'charge.updated': {
-            const session = event.data.object as Stripe.Charge;
-            
-
-             
-          }
-          case 'charge.succeeded': {
-            const session = event.data.object as Stripe.Charge;
-             
-            
-            break;
-          }
+        case 'charge.updated': {
+          const session = event.data.object as Stripe.Charge;
+          break;
+        }
+        case 'charge.succeeded': {
+          const session = event.data.object as Stripe.Charge;
+          break;
+        }
         case 'payment_intent.succeeded': {
-  
-            const paymentIntent = event.data.object as Stripe.PaymentIntent;
-            const latestCharge = paymentIntent.latest_charge?.toString();
-         
-            const charge =  await stripeInstance.charges.retrieve(latestCharge!, { 
-                                          expand: ['data.payment_intent', 'data.reciept_url'] 
-                                          });
-             
-                //const paymenlink = charge.metadata.paymenlink;
-                await storage.getInvoice(19).then((invoice) => {
-                  if (invoice) {
-                    console.log(`update Invoice: ${ invoice.id }`);
-                    storage.updateInvoiceReceipt(invoice.id, charge.receipt_url!);
-                  }
-  
-               
-              });;
-             
-          
-               
-             break;
-          }
-       
+          const paymentIntent = event.data.object as Stripe.PaymentIntent;
+          const latestCharge = paymentIntent.latest_charge?.toString();
+
+          const charge = await stripeInstance.charges.retrieve(latestCharge!, {
+            expand: ['data.payment_intent', 'data.reciept_url']
+          });
+
+          await storage.getInvoice(19).then((invoice) => {
+            if (invoice) {
+              console.log(`update Invoice: ${invoice.id}`);
+              storage.updateInvoiceReceipt(invoice.id, charge.receipt_url!);
+            }
+          });;
+          break;
+        }
         default:
           console.log(`Unhandled event type: ${event.type}`);
       }
@@ -731,8 +714,8 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
       } : undefined
     });
 
-    // Import Document component from react-pdf/renderer
-    const { Document } = require('@react-pdf/renderer');
+    // Import Document component and pdf function from react-pdf/renderer
+    const { Document, pdf } = require('@react-pdf/renderer');
 
     // Wrap in Document component for proper PDF generation
     const document = React.createElement(
@@ -741,7 +724,8 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
       pdfComponent
     );
 
-    return await renderToBuffer(document);
+    // Use pdf().toBuffer() instead of renderToBuffer
+    return await pdf(document).toBuffer();
   } catch (error) {
     console.error('Failed to generate PDF:', error);
     return undefined;

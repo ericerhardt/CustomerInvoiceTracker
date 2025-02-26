@@ -24,13 +24,13 @@ export const invoices = pgTable("invoices", {
   number: text("number").notNull(),
   customerId: integer("customer_id").notNull(),
   userId: integer("user_id").notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),  // Explicitly set precision and scale
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   status: text("status").notNull().default("pending"),
   dueDate: timestamp("due_date").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   stripePaymentId: text("stripe_payment_id"),
   stripePaymentUrl: text("stripe_payment_url"),
-  stripeReceiptUrl: text("stripe_receipt_url"), // Add the new receipt URL field
+  stripeReceiptUrl: text("stripe_receipt_url"),
 });
 
 export const invoiceItems = pgTable("invoice_items", {
@@ -123,6 +123,8 @@ export type InsertSettings = z.infer<typeof insertSettingsSchema>;
 
 export type User = typeof users.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
-export type Invoice = typeof invoices.$inferSelect;
+export type Invoice = typeof invoices.$inferSelect & {
+  isResending?: boolean; // Add isResending for optimistic updates
+};
 export type InvoiceItem = typeof invoiceItems.$inferSelect;
 export type Settings = typeof settings.$inferSelect;

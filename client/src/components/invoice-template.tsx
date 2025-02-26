@@ -1,4 +1,4 @@
-import { Customer } from "@shared/schema";
+import { Customer, Settings } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
@@ -26,7 +26,7 @@ interface InvoiceTemplateProps {
 }
 
 export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRAFT" }: InvoiceTemplateProps) {
-  const { data: settings } = useQuery({
+  const { data: settings } = useQuery<Settings>({
     queryKey: ["/api/settings"],
   });
 
