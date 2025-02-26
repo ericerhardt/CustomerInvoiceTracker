@@ -98,12 +98,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log('Processing checkout.session.completed:', {
             sessionId: session.id,
             invoiceId,
-            metadata: session.metadata
+            metadata: session.metadata,
+            paymentStatus: session.payment_status,
+            paymentIntent: session.payment_intent
           });
 
           if (invoiceId) {
             try {
-              // await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
               console.log(`Successfully updated invoice ${invoiceId} status to paid (via checkout)`);
             } catch (updateError) {
               console.error(`Failed to update invoice ${invoiceId} status:`, updateError);
