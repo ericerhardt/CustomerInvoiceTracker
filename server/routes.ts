@@ -672,7 +672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stripeWebhookSecret: updatedSettings.stripeWebhookSecret || null,
         sendGridApiKey: updatedSettings.sendGridApiKey || '',
         sendGridFromEmail: updatedSettings.sendGridFromEmail || '',
-        resetLinkUrl: updatedSettings.resetLinkUrl || 'http://localhost:5000/reset-password',
+        resetLinkUrl: updatedSettings.resetLinkUrl || 'http://localhost:5001/reset-password',
         taxRate: updatedSettings.taxRate || '10.00',
         userId: req.user.id,
       });
