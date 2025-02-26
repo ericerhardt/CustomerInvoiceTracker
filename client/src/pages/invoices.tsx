@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Navigation } from "@/components/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
 import {
   Table,
@@ -23,16 +24,22 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { PlusCircle, Trash2, Edit, Send, Loader2 } from "lucide-react";
+import { PlusCircle, Trash2, Edit, Send, Loader2, Search, ArrowUpDown } from "lucide-react";
 import { Invoice, Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 const ITEMS_PER_PAGE = 10;
 
+type SortField = "number" | "customerName" | "amount" | "status" | "dueDate";
+type SortOrder = "asc" | "desc";
+
 export default function InvoicesPage() {
   const { toast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortField, setSortField] = useState<SortField>("number");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [resendingInvoiceId, setResendingInvoiceId] = useState<number | null>(null);
 
   const { data: invoices, isLoading: isLoadingInvoices } = useQuery<Invoice[]>({
@@ -42,6 +49,63 @@ export default function InvoicesPage() {
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
   });
+
+  // Filter and sort invoices
+  const filteredAndSortedInvoices = useMemo(() => {
+    if (!invoices) return [];
+
+    let filtered = invoices;
+
+    // Apply search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter((invoice) => {
+        const customer = customers?.find((c) => c.id === invoice.customerId);
+        return (
+          invoice.number.toLowerCase().includes(searchLower) ||
+          customer?.name.toLowerCase().includes(searchLower) ||
+          invoice.amount.toString().includes(searchLower) ||
+          invoice.status.toLowerCase().includes(searchLower)
+        );
+      });
+    }
+
+    // Apply sorting
+    return [...filtered].sort((a, b) => {
+      const multiplier = sortOrder === "asc" ? 1 : -1;
+
+      if (sortField === "customerName") {
+        const customerA = customers?.find((c) => c.id === a.customerId)?.name || "";
+        const customerB = customers?.find((c) => c.id === b.customerId)?.name || "";
+        return customerA.localeCompare(customerB) * multiplier;
+      }
+
+      if (sortField === "dueDate") {
+        return (new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()) * multiplier;
+      }
+
+      if (sortField === "amount") {
+        return (Number(a.amount) - Number(b.amount)) * multiplier;
+      }
+
+      return a[sortField].localeCompare(b[sortField]) * multiplier;
+    });
+  }, [invoices, customers, searchTerm, sortField, sortOrder]);
+
+  const totalPages = Math.ceil((filteredAndSortedInvoices?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedInvoices = filteredAndSortedInvoices.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
 
   const deleteInvoice = useMutation({
     mutationFn: async (invoiceId: number) => {
@@ -105,12 +169,6 @@ export default function InvoicesPage() {
     }
   };
 
-  const totalPages = Math.ceil((invoices?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedInvoices = invoices?.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
-
   if (isLoadingInvoices) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -141,22 +199,81 @@ export default function InvoicesPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Invoice List</CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle>Invoice List</CardTitle>
+              <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search invoices..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-8"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Invoice Number</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Due Date</TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleSort("number")}
+                      className="flex items-center gap-2"
+                    >
+                      Invoice Number
+                      <ArrowUpDown className="h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleSort("customerName")}
+                      className="flex items-center gap-2"
+                    >
+                      Customer
+                      <ArrowUpDown className="h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleSort("amount")}
+                      className="flex items-center gap-2"
+                    >
+                      Amount
+                      <ArrowUpDown className="h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleSort("status")}
+                      className="flex items-center gap-2"
+                    >
+                      Status
+                      <ArrowUpDown className="h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => toggleSort("dueDate")}
+                      className="flex items-center gap-2"
+                    >
+                      Due Date
+                      <ArrowUpDown className="h-4 w-4" />
+                    </Button>
+                  </TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedInvoices?.map((invoice) => {
+                {paginatedInvoices.map((invoice) => {
                   const customer = customers?.find((c) => c.id === invoice.customerId);
                   return (
                     <TableRow key={invoice.id}>

@@ -108,7 +108,7 @@ async function checkPort(port: number): Promise<boolean> {
 // Initialize server with proper error handling
 async function startServer() {
   try {
-    const PORT = 5001; // Use deployment port
+    const PORT = 5000; // Changed from 5001 to 5000
     const RETRY_DELAY = 3000; // 3 seconds delay
     const MAX_RETRIES = 5;
     const KILL_ATTEMPTS = 3;
@@ -145,20 +145,15 @@ async function startServer() {
 
     // Verify database connection first
     await verifyDatabaseConnection();
-
     const server = await registerRoutes(app);
-
-    // Add error handler after all routes
     app.use(errorHandler);
 
-    // Setup Vite or static serving based on environment
     if (app.get("env") === "development") {
       await setupVite(app, server);
     } else {
       serveStatic(app);
     }
 
-    // Start listening with retry logic
     let retries = MAX_RETRIES;
     const startListening = async () => {
       try {
@@ -182,7 +177,6 @@ async function startServer() {
 
     await startListening();
 
-    // Handle process termination
     process.on('SIGTERM', () => {
       console.log('SIGTERM received. Shutting down gracefully...');
       server.close(() => {
