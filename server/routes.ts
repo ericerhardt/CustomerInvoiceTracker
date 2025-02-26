@@ -4,13 +4,13 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import Stripe from "stripe";
 import React from 'react';
-import { pdf, Document } from '@react-pdf/renderer';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
 import type { InvoiceItem } from "@shared/schema";
 import express from "express";
 import { users } from "@shared/schema";
 import { db } from "./db";
 import { sendInvoiceEmail } from "./email";
+import { session } from "passport";
 
 // Update the getStripe helper function to include better error handling
 async function getStripe(userId: number) {
@@ -89,13 +89,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         return res.status(400).send(`Webhook signature verification failed`);
       }
-
-      // Handle the event
+        
+      
+       
       switch (event.type) {
+        
         case 'checkout.session.completed': {
           const session = event.data.object as Stripe.Checkout.Session;
-          const invoiceId = session.metadata?.invoiceId;
-
+          const invoiceId =  session.metadata?.invoiceId;
+             
           console.log('Processing checkout.session.completed:', {
             sessionId: session.id,
             invoiceId,
@@ -104,53 +106,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (invoiceId) {
             try {
-              const charge = await stripeInstance.charges.retrieve(session.payment_intent as string);
-              const receiptUrl = charge.receipt_url;
-
-              // Update invoice with receipt URL (this will also set status to paid)
-              await storage.updateInvoiceReceipt(parseInt(invoiceId), receiptUrl || '');
-              console.log(`Successfully updated invoice ${invoiceId} status and receipt`);
+              
+             // await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              console.log(`Successfully updated invoice ${invoiceId} status to paid (via checkout)`); 
+              
             } catch (updateError) {
-              console.error(`Failed to update invoice ${invoiceId}:`, updateError);
-              throw updateError;
+              console.error(`Failed to update invoice ${invoiceId} status:`, updateError);
+              throw updateError; // Re-throw to trigger error handling
             }
           } else {
             console.warn('No invoiceId found in checkout session metadata');
           }
           break;
         }
+          case 'charge.updated': {
+            const session = event.data.object as Stripe.Charge;
+            
+
+             
+          }
+          case 'charge.succeeded': {
+            const session = event.data.object as Stripe.Charge;
+             
+            
+            break;
+          }
         case 'payment_intent.succeeded': {
-          const paymentIntent = event.data.object as Stripe.PaymentIntent;
-          const invoiceId = paymentIntent.metadata?.invoiceId;
-
-          console.log('Processing payment_intent.succeeded:', {
-            paymentIntentId: paymentIntent.id,
-            invoiceId,
-            metadata: paymentIntent.metadata,
-            hasCharges: paymentIntent.latest_charge ? 'yes' : 'no'
-          });
-          /*
-          if (invoiceId) {
-            try {
-              // Get the receipt URL from the latest charge
-              const charge = await stripeInstance.charges.retrieve(paymentIntent.latest_charge as string);
-              const receiptUrl = charge.receipt_url;
-
-              console.log('Found receipt URL:', receiptUrl);
-
-              // Update invoice with receipt URL and paid status
-              await storage.updateInvoiceReceipt(parseInt(invoiceId), receiptUrl);
-              console.log(`Successfully updated invoice ${invoiceId} with receipt URL`);
-            } catch (updateError) {
-              console.error(`Failed to update invoice ${invoiceId}:`, updateError);
-              throw updateError;
-            }
-          } else {
-            console.warn('No invoiceId found in payment intent metadata');
-           }
-           */
-          break;
-        }
+  
+            const paymentIntent = event.data.object as Stripe.PaymentIntent;
+            const latestCharge = paymentIntent.latest_charge?.toString();
+         
+            const charge =  await stripeInstance.charges.retrieve(latestCharge!, { 
+                                          expand: ['data.payment_intent', 'data.reciept_url'] 
+                                          });
+             
+                //const paymenlink = charge.metadata.paymenlink;
+                await storage.getInvoice(19).then((invoice) => {
+                  if (invoice) {
+                    console.log(`update Invoice: ${ invoice.id }`);
+                    storage.updateInvoiceReceipt(invoice.id, charge.receipt_url!);
+                  }
+  
+               
+              });;
+             
+          
+               
+             break;
+          }
+       
         default:
           console.log(`Unhandled event type: ${event.type}`);
       }
@@ -390,8 +394,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Ensure we have a complete URL for the redirect
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const successUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
-      console.log('Creating payment link with success URL:', successUrl);
+      const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
+      console.log('Creating new payment link with redirect URL:', redirectUrl);
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
           price: price.id,
@@ -402,7 +406,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         after_completion: {
           type: 'redirect',
-          redirect: { url: successUrl }
+          redirect: { url: redirectUrl }
         }
       });
 
@@ -518,9 +522,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const successUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
+      const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
 
-      console.log('Creating new payment link with success URL:', successUrl);
+      console.log('Creating new payment link with redirect URL:', redirectUrl);
 
       const paymentLink = await stripeInstance.paymentLinks.create({
         line_items: [{
@@ -532,7 +536,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         after_completion: {
           type: 'redirect',
-          redirect: { url: successUrl }
+          redirect: { url: redirectUrl }
         }
       });
 
@@ -710,7 +714,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Helper function for generating PDF
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
   try {
-    // Create InvoicePDF component with props
     const pdfComponent = React.createElement(InvoicePDF, {
       items: items.map(item => ({
         description: item.description,
@@ -728,12 +731,17 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
       } : undefined
     });
 
-    // Create PDF document with proper typing
-    const document = React.createElement(Document, {}, pdfComponent);
+    // Import Document component from react-pdf/renderer
+    const { Document } = require('@react-pdf/renderer');
 
-    // Generate PDF buffer
-    const buffer = await pdf(document).toBuffer();
-    return Buffer.isBuffer(buffer) ? buffer : undefined;
+    // Wrap in Document component for proper PDF generation
+    const document = React.createElement(
+      Document,
+      null,
+      pdfComponent
+    );
+
+    return await renderToBuffer(document);
   } catch (error) {
     console.error('Failed to generate PDF:', error);
     return undefined;

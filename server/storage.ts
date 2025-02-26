@@ -28,7 +28,7 @@ export interface IStorage {
   createInvoice(invoice: InsertInvoice & { userId: number }): Promise<Invoice>;
   getInvoicesByUserId(userId: number): Promise<Invoice[]>;
   getInvoice(id: number): Promise<Invoice | undefined>;
-  updateInvoiceStatus(id: number, status: string): Promise<Invoice>;
+  updateInvoiceStatus(id: number, status: string, stripe_reciept_url: string): Promise<Invoice>;
   updateInvoicePayment(id: number, paymentId: string, paymentUrl: string): Promise<Invoice>;
   updateInvoice(id: number, invoice: InsertInvoice & { userId: number }): Promise<Invoice>;
   deleteInvoice(id: number): Promise<void>;
@@ -115,12 +115,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Invoice operations with userId filtering
-  async updateInvoiceStatus(id: number, status: string): Promise<Invoice> {
+  async updateInvoiceStatus(id: number, status: string, stripe_reciept_url: string): Promise<Invoice> {
     console.log(`Attempting to update invoice ${id} status to ${status}`);
     try {
       const [invoice] = await db
         .update(invoices)
-        .set({ status })
+        .set({ status: status, stripeReceiptUrl: stripe_reciept_url })
         .where(eq(invoices.id, id))
         .returning();
 
@@ -169,6 +169,11 @@ export class DatabaseStorage implements IStorage {
 
   async getInvoice(id: number): Promise<Invoice | undefined> {
     const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
+    return invoice;
+  }
+
+  async getInvoicePaymentId(id: string): Promise<Invoice | undefined> {
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.stripePaymentId, id)).limit(1);
     return invoice;
   }
 
