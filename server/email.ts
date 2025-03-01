@@ -12,13 +12,6 @@ interface SendInvoiceEmailParams {
   paymentMethod: 'credit_card' | 'check';
 }
 
-interface SendPasswordResetEmailParams {
-  to: string;
-  resetToken: string;
-  resetUrl: string;
-  userId: number;
-}
-
 export async function sendInvoiceEmail({
   to,
   invoiceNumber,
@@ -40,6 +33,7 @@ export async function sendInvoiceEmail({
 
   try {
     console.log('Starting invoice email process for:', to);
+    console.log('PDF Buffer present:', !!pdfBuffer, 'Size:', pdfBuffer?.length || 0);
 
     // Get settings from database
     const settings = await storage.getSettingsByUserId(userId);
@@ -64,7 +58,7 @@ export async function sendInvoiceEmail({
       ? `Please make your check payable to "${companyName}" and mail it to:\n${settings.companyAddress}`
       : `Pay now: ${paymentUrl}`;
 
-    const paymentButton = paymentMethod === 'credit_card'
+    const paymentButton = paymentMethod === 'credit_card' && paymentUrl
       ? `<a href="${paymentUrl}" style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 16px;">Pay Now</a>`
       : `<div style="margin-top: 16px; padding: 12px; background-color: #f5f5f5; border-radius: 4px;">
           <p style="margin: 0;">Please make check payable to:</p>
@@ -73,6 +67,7 @@ export async function sendInvoiceEmail({
           <p style="margin: 8px 0;">${settings.companyAddress}</p>
         </div>`;
 
+    // Prepare email with attachments if PDF buffer is present
     const msg = {
       to,
       from: {
@@ -95,18 +90,25 @@ export async function sendInvoiceEmail({
           filename: `invoice-${invoiceNumber}.pdf`,
           type: 'application/pdf',
           disposition: 'attachment',
+          contentId: `invoice-${invoiceNumber}`,
         },
       ] : undefined,
     };
 
-    console.log('Sending email with SendGrid...', { to, invoiceNumber });
+    console.log('Sending email with SendGrid...', { 
+      to, 
+      invoiceNumber,
+      hasAttachment: !!pdfBuffer 
+    });
+
     const [response] = await sgMail.send(msg);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       console.log('SendGrid email sent successfully:', {
         statusCode: response.statusCode,
         to,
-        invoiceNumber
+        invoiceNumber,
+        attachmentIncluded: !!pdfBuffer
       });
       return true;
     } else {
