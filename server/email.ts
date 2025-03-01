@@ -32,8 +32,12 @@ export async function sendInvoiceEmail({
   }).format(new Date(dueDate));
 
   try {
-    console.log('Starting invoice email process for:', to);
-    console.log('PDF Buffer present:', !!pdfBuffer, 'Size:', pdfBuffer?.length || 0);
+    console.log('Starting invoice email process:', {
+      to,
+      invoiceNumber,
+      hasPDF: !!pdfBuffer,
+      pdfSize: pdfBuffer?.length || 0
+    });
 
     // Get settings from database
     const settings = await storage.getSettingsByUserId(userId);
@@ -43,72 +47,66 @@ export async function sendInvoiceEmail({
     if (!settings?.sendGridFromEmail) {
       throw new Error('SendGrid sender email not configured in settings');
     }
-    if (!settings.sendGridApiKey.startsWith('SG.')) {
-      throw new Error('Invalid SendGrid API key format in settings. Must start with "SG."');
-    }
 
     const apiKey = settings.sendGridApiKey;
     const fromEmail = settings.sendGridFromEmail;
     const companyName = settings.companyName || 'Invoice System';
 
-    console.log('Configuring SendGrid with API key and attempting to send to:', to);
+    console.log('Configuring SendGrid with API key for:', fromEmail);
     sgMail.setApiKey(apiKey);
 
     const paymentInstructions = paymentMethod === 'check'
       ? `Please make your check payable to "${companyName}" and mail it to:\n${settings.companyAddress}`
-      : `Pay now: ${paymentUrl}`;
+      : paymentUrl ? `Pay now: ${paymentUrl}` : 'Payment link will be sent separately';
 
-    const paymentButton = paymentMethod === 'credit_card' && paymentUrl
-      ? `<a href="${paymentUrl}" style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 16px;">Pay Now</a>`
-      : `<div style="margin-top: 16px; padding: 12px; background-color: #f5f5f5; border-radius: 4px;">
-          <p style="margin: 0;">Please make check payable to:</p>
-          <p style="margin: 8px 0; font-weight: bold;">${companyName}</p>
-          <p style="margin: 0;">Mail to:</p>
-          <p style="margin: 8px 0;">${settings.companyAddress}</p>
-        </div>`;
-
-    // Prepare email with attachments if PDF buffer is present
-    const msg = {
+    // Prepare email
+    const msg: any = {
       to,
       from: {
         email: fromEmail,
         name: companyName
       },
       subject: `Invoice ${invoiceNumber} - Payment Required`,
-      text: `Amount due: ${formattedAmount}\nDue date: ${formattedDate}\n${paymentInstructions}`,
+      text: `Amount due: ${formattedAmount}\nDue date: ${formattedDate}\n\n${paymentInstructions}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Invoice ${invoiceNumber}</h2>
           <p>Amount due: ${formattedAmount}</p>
           <p>Due date: ${formattedDate}</p>
-          ${paymentButton}
+          ${paymentMethod === 'credit_card' && paymentUrl 
+            ? `<a href="${paymentUrl}" style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 16px;">Pay Now</a>`
+            : `<div style="margin-top: 16px; padding: 12px; background-color: #f5f5f5; border-radius: 4px;">
+                <p style="margin: 0;">Please make check payable to:</p>
+                <p style="margin: 8px 0; font-weight: bold;">${companyName}</p>
+                <p style="margin: 0;">Mail to:</p>
+                <p style="margin: 8px 0;">${settings.companyAddress}</p>
+              </div>`
+          }
         </div>
-      `,
-      attachments: pdfBuffer ? [
-        {
-          content: pdfBuffer.toString('base64'),
-          filename: `invoice-${invoiceNumber}.pdf`,
-          type: 'application/pdf',
-          disposition: 'attachment',
-          contentId: `invoice-${invoiceNumber}`,
-        },
-      ] : undefined,
+      `
     };
 
-    console.log('Sending email with SendGrid...', { 
-      to, 
-      invoiceNumber,
-      hasAttachment: !!pdfBuffer 
-    });
+    // Add PDF attachment if buffer exists
+    if (pdfBuffer && pdfBuffer.length > 0) {
+      msg.attachments = [{
+        content: pdfBuffer.toString('base64'),
+        filename: `invoice-${invoiceNumber}.pdf`,
+        type: 'application/pdf',
+        disposition: 'attachment'
+      }];
+      console.log('Added PDF attachment to email');
+    } else {
+      console.warn('No PDF buffer available for attachment');
+    }
 
+    // Send email
     const [response] = await sgMail.send(msg);
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      console.log('SendGrid email sent successfully:', {
-        statusCode: response.statusCode,
+      console.log('Email sent successfully:', {
         to,
         invoiceNumber,
-        attachmentIncluded: !!pdfBuffer
+        hasPDFAttachment: !!msg.attachments
       });
       return true;
     } else {
@@ -116,16 +114,7 @@ export async function sendInvoiceEmail({
     }
   } catch (error) {
     console.error('Failed to send invoice email:', error);
-    if (error instanceof Error) {
-      console.error('SendGrid Error Details:', error.message);
-      if (error.message.includes('authorization') || error.message.includes('forbidden')) {
-        throw new Error('SendGrid API key in settings is invalid or has insufficient permissions');
-      }
-      if (error.message.includes('verified Sender Identity')) {
-        throw new Error('Email sender in settings not verified with SendGrid. Please verify your sender email.');
-      }
-    }
-    throw new Error('Failed to send invoice email');
+    throw error;
   }
 }
 
