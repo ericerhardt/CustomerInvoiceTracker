@@ -461,7 +461,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.user.id
       });
 
-      const stripeInstance = await getStripe(req.user.id);
       const invoice = await storage.getInvoice(parseInt(req.params.id));
       if (!invoice) {
         console.error('Invoice not found:', req.params.id);
@@ -487,57 +486,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hasSendGridKey: !!settings?.sendGridApiKey
       });
 
-      // Deactivate old payment link if it exists
-      if (invoice.stripePaymentId) {
-        try {
-          await stripeInstance.paymentLinks.update(invoice.stripePaymentId, {
-            active: false
-          });
-          console.log('Deactivated old payment link:', invoice.stripePaymentId);
-        } catch (stripeError) {
-          console.error('Failed to deactivate old payment link:', stripeError);
+      let paymentLink;
+      // Only handle Stripe for credit card payments
+      if (invoice.paymentMethod === 'credit_card') {
+        const stripeInstance = await getStripe(req.user.id);
+        // Deactivate old payment link if it exists
+        if (invoice.stripePaymentId) {
+          try {
+            await stripeInstance.paymentLinks.update(invoice.stripePaymentId, {
+              active: false
+            });
+            console.log('Deactivated old payment link:', invoice.stripePaymentId);
+          } catch (stripeError) {
+            console.error('Failed to deactivate old payment link:', stripeError);
+          }
         }
-      }
 
-      // Create new payment link
-      const price = await stripeInstance.prices.create({
-        currency: 'usd',
-        unit_amount: Math.round(Number(invoice.amount) * 100),
-        product_data: {
-          name: `Invoice ${invoice.number}`,
+        // Create new payment link
+        const price = await stripeInstance.prices.create({
+          currency: 'usd',
+          unit_amount: Math.round(Number(invoice.amount) * 100),
+          product_data: {
+            name: `Invoice ${invoice.number}`,
+            metadata: {
+              invoiceId: invoice.id.toString(),
+            },
+          },
+        });
+
+        const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+        const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
+
+        console.log('Creating new payment link with redirect URL:', redirectUrl);
+
+        paymentLink = await stripeInstance.paymentLinks.create({
+          line_items: [{
+            price: price.id,
+            quantity: 1,
+          }],
           metadata: {
             invoiceId: invoice.id.toString(),
           },
-        },
-      });
+          after_completion: {
+            type: 'redirect',
+            redirect: { url: redirectUrl }
+          }
+        });
 
-      const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
+        console.log('Created new payment link:', paymentLink.url);
 
-      console.log('Creating new payment link with redirect URL:', redirectUrl);
-
-      const paymentLink = await stripeInstance.paymentLinks.create({
-        line_items: [{
-          price: price.id,
-          quantity: 1,
-        }],
-        metadata: {
-          invoiceId: invoice.id.toString(),
-        },
-        after_completion: {
-          type: 'redirect',
-          redirect: { url: redirectUrl }
-        }
-      });
-
-      console.log('Created new payment link:', paymentLink.url);
-
-      // Update invoice with new payment link
-      const updatedInvoice = await storage.updateInvoicePayment(
-        invoice.id,
-        paymentLink.id,
-        paymentLink.url
-      );
+        // Update invoice with new payment link
+        await storage.updateInvoicePayment(
+          invoice.id,
+          paymentLink.id,
+          paymentLink.url
+        );
+      }
 
       // Generate PDF
       let pdfBuffer: Buffer | undefined;
@@ -556,23 +560,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             invoiceNumber: invoice.number,
             amount: Number(invoice.amount),
             dueDate: invoice.dueDate,
-            paymentUrl: paymentLink.url,
+            paymentUrl: paymentLink?.url,
             pdfBuffer,
-            userId: req.user.id
+            userId: req.user.id,
+            paymentMethod: invoice.paymentMethod as 'credit_card' | 'check'
           });
           console.log('Successfully sent invoice email');
-          res.json(updatedInvoice);
+          res.json(invoice);
         } catch (emailError) {
           console.error('Failed to send invoice email:', emailError);
           res.status(200).json({
-            ...updatedInvoice,
+            ...invoice,
             emailError: emailError instanceof Error ? emailError.message : 'Unknown email error'
           });
         }
       } else {
         console.log('SendGrid API key not configured, skipping email send');
         res.status(200).json({
-          ...updatedInvoice,
+          ...invoice,
           emailError: 'SendGrid API key not configured'
         });
       }
