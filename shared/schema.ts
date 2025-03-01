@@ -32,6 +32,8 @@ export const invoices = pgTable("invoices", {
   stripePaymentUrl: text("stripe_payment_url"),
   stripeReceiptUrl: text("stripe_receipt_url"),
   paymentMethod: text("payment_method").notNull().default("credit_card"), // Add payment method field
+  checkReceivedDate: timestamp("check_received_date"), // Add field to track when check was received
+  checkNumber: text("check_number"), // Add field to track check number
 });
 
 export const invoiceItems = pgTable("invoice_items", {
@@ -39,7 +41,7 @@ export const invoiceItems = pgTable("invoice_items", {
   invoiceId: integer("invoice_id").notNull(),
   description: text("description").notNull(),
   quantity: integer("quantity").notNull(),
-  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),  // Explicitly set precision and scale
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
 });
 
 export const settings = pgTable("settings", {
@@ -50,14 +52,14 @@ export const settings = pgTable("settings", {
   companyEmail: text("company_email").notNull(),
   stripeSecretKey: text("stripe_secret_key").notNull(),
   stripePublicKey: text("stripe_public_key").notNull(),
-  stripeWebhookSecret: text("stripe_webhook_secret"), 
+  stripeWebhookSecret: text("stripe_webhook_secret"),
   sendGridApiKey: text("sendgrid_api_key").notNull(),
   sendGridFromEmail: text("sendgrid_from_email").notNull(),
   resetLinkUrl: text("reset_link_url").notNull().default("http://localhost:5000/reset-password"),
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default('10'),
 });
 
-// Keep schema exports and types unchanged
+// Update schema exports and types
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -83,6 +85,8 @@ export const insertInvoiceSchema = createInsertSchema(invoices)
     dueDate: z.coerce.date(),
     amount: z.coerce.number().positive(),
     paymentMethod: z.enum(["credit_card", "check"]).default("credit_card"),
+    checkNumber: z.string().optional(),
+    checkReceivedDate: z.date().optional(),
   });
 
 export const insertInvoiceItemSchema = createInsertSchema(invoiceItems)
@@ -126,7 +130,7 @@ export type InsertSettings = z.infer<typeof insertSettingsSchema>;
 export type User = typeof users.$inferSelect;
 export type Customer = typeof customers.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect & {
-  isResending?: boolean; // Add isResending for optimistic updates
+  isResending?: boolean;
 };
 export type InvoiceItem = typeof invoiceItems.$inferSelect;
 export type Settings = typeof settings.$inferSelect;

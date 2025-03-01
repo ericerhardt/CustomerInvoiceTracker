@@ -37,6 +37,7 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
   const [, setLocation] = useLocation();
   const [items, setItems] = useState([{ description: "", quantity: 1, unitPrice: 0 }]);
   const [payByCheck, setPayByCheck] = useState(false);
+  const [checkReceived, setCheckReceived] = useState(false);
 
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -48,6 +49,9 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
     }
     if (invoice?.paymentMethod === "check") {
       setPayByCheck(true);
+      if (invoice.checkReceivedDate) {
+        setCheckReceived(true);
+      }
     }
   }, [invoice]);
 
@@ -60,6 +64,10 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
         ? new Date(invoice.dueDate).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
       paymentMethod: invoice?.paymentMethod || "credit_card",
+      checkNumber: invoice?.checkNumber || "",
+      checkReceivedDate: invoice?.checkReceivedDate
+        ? new Date(invoice.checkReceivedDate).toISOString().split('T')[0]
+        : undefined,
     },
   });
 
@@ -71,6 +79,8 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
         { 
           ...data,
           paymentMethod: payByCheck ? "check" : "credit_card",
+          checkNumber: payByCheck ? data.checkNumber : undefined,
+          checkReceivedDate: payByCheck && checkReceived ? data.checkReceivedDate : undefined,
           items: items.map(item => ({
             ...item,
             quantity: Number(item.quantity),
@@ -166,6 +176,59 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
               />
             </FormControl>
           </FormItem>
+
+          {payByCheck && (
+            <>
+              <FormField
+                control={form.control}
+                name="checkNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Check Number</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel>Check Received</FormLabel>
+                  <FormDescription>
+                    Toggle when the check payment has been received
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={checkReceived}
+                    onCheckedChange={setCheckReceived}
+                  />
+                </FormControl>
+              </FormItem>
+
+              {checkReceived && (
+                <FormField
+                  control={form.control}
+                  name="checkReceivedDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Check Received Date</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          {...field}
+                          value={field.value || new Date().toISOString().split('T')[0]}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </>
+          )}
 
           <FormField
             control={form.control}
