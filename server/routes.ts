@@ -350,7 +350,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) return res.sendStatus(401);
 
     try {
-      const stripeInstance = await getStripe(req.user.id);
       const { items, ...invoiceData } = req.body;
       const invoice = await storage.createInvoice({
         ...invoiceData,
@@ -365,42 +364,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create Stripe payment link with proper metadata
-      const price = await stripeInstance.prices.create({
-        currency: 'usd',
-        unit_amount: Math.round(Number(invoice.amount) * 100),
-        product_data: {
-          name: `Invoice ${invoice.number}`,
+      let paymentLink;
+      // Only create Stripe payment link for credit card payments
+      if (invoice.paymentMethod === 'credit_card') {
+        const stripeInstance = await getStripe(req.user.id);
+        const price = await stripeInstance.prices.create({
+          currency: 'usd',
+          unit_amount: Math.round(Number(invoice.amount) * 100),
+          product_data: {
+            name: `Invoice ${invoice.number}`,
+            metadata: {
+              invoiceId: invoice.id.toString(),
+            },
+          },
+        });
+
+        const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+        const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
+        console.log('Creating new payment link with redirect URL:', redirectUrl);
+
+        paymentLink = await stripeInstance.paymentLinks.create({
+          line_items: [{
+            price: price.id,
+            quantity: 1,
+          }],
           metadata: {
             invoiceId: invoice.id.toString(),
           },
-        },
-      });
+          after_completion: {
+            type: 'redirect',
+            redirect: { url: redirectUrl }
+          }
+        });
 
-      // Ensure we have a complete URL for the redirect
-      const baseUrl = process.env.PUBLIC_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
-      const redirectUrl = new URL(`/thank-you?invoice=${invoice.id}`, baseUrl).toString();
-      console.log('Creating new payment link with redirect URL:', redirectUrl);
-      const paymentLink = await stripeInstance.paymentLinks.create({
-        line_items: [{
-          price: price.id,
-          quantity: 1,
-        }],
-        metadata: {
-          invoiceId: invoice.id.toString(),
-        },
-        after_completion: {
-          type: 'redirect',
-          redirect: { url: redirectUrl }
-        }
-      });
-
-      // Update invoice with Stripe payment details
-      const updatedInvoice = await storage.updateInvoicePayment(
-        invoice.id,
-        paymentLink.id,
-        paymentLink.url
-      );
+        // Update invoice with Stripe payment details
+        await storage.updateInvoicePayment(
+          invoice.id,
+          paymentLink.id,
+          paymentLink.url
+        );
+      }
 
       // Get customer and settings for PDF generation
       const customer = await storage.getCustomer(invoice.customerId);
@@ -409,6 +412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate PDF
       let pdfBuffer: Buffer | undefined;
       try {
+        const items = await storage.getInvoiceItems(invoice.id);
         pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
         console.log('Generated PDF buffer:', !!pdfBuffer);
       } catch (pdfError) {
@@ -423,20 +427,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             invoiceNumber: invoice.number,
             amount: Number(invoice.amount),
             dueDate: invoice.dueDate,
-            paymentUrl: paymentLink.url,
+            paymentUrl: paymentLink?.url,
             pdfBuffer,
-            userId: req.user.id
+            userId: req.user.id,
+            paymentMethod: invoice.paymentMethod as 'credit_card' | 'check'
           });
         } catch (emailError) {
           console.error('Failed to send invoice email:', emailError);
           return res.status(200).json({
-            ...updatedInvoice,
+            ...invoice,
             emailError: emailError instanceof Error ? emailError.message : 'Unknown email error'
           });
         }
       }
 
-      res.status(201).json(updatedInvoice);
+      res.status(201).json(invoice);
     } catch (error) {
       console.error('Invoice creation failed:', error);
       res.status(500).json({
@@ -699,6 +704,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Helper function for generating PDF
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
   try {
+    // Import required modules from react-pdf/renderer at the top level
+    const { Document, pdf } = await import('@react-pdf/renderer');
+
     const pdfComponent = React.createElement(InvoicePDF, {
       items: items.map(item => ({
         description: item.description,
@@ -716,9 +724,6 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
       } : undefined
     });
 
-    // Import Document component and pdf function from react-pdf/renderer
-    const { Document, pdf } = require('@react-pdf/renderer');
-
     // Wrap in Document component for proper PDF generation
     const document = React.createElement(
       Document,
@@ -726,7 +731,7 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
       pdfComponent
     );
 
-    // Use pdf().toBuffer() instead of renderToBuffer
+    // Generate PDF buffer
     return await pdf(document).toBuffer();
   } catch (error) {
     console.error('Failed to generate PDF:', error);
