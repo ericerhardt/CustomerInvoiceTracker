@@ -709,9 +709,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Helper function for generating PDF
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
   try {
-    // Import required modules from react-pdf/renderer at the top level
-    const { Document, pdf } = await import('@react-pdf/renderer');
+    // Import required modules from react-pdf/renderer dynamically
+    const { renderToBuffer } = await import('@react-pdf/renderer');
+    const { Document } = await import('@react-pdf/renderer');
 
+    // Create the PDF component
     const pdfComponent = React.createElement(InvoicePDF, {
       items: items.map(item => ({
         description: item.description,
@@ -730,16 +732,14 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
     });
 
     // Wrap in Document component for proper PDF generation
-    const document = React.createElement(
-      Document,
-      null,
-      pdfComponent
-    );
+    const document = React.createElement(Document, null, pdfComponent);
 
-    // Generate PDF buffer
-    return await pdf(document).toBuffer();
+    // Use renderToBuffer instead of pdf().toBuffer()
+    const buffer = await renderToBuffer(document);
+    console.log('PDF generation successful, buffer size:', buffer.length);
+    return buffer;
   } catch (error) {
     console.error('Failed to generate PDF:', error);
-    return undefined;
+    throw error; // Rethrow the error for proper handling
   }
 }
