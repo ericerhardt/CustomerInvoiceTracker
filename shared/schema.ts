@@ -31,9 +31,9 @@ export const invoices = pgTable("invoices", {
   stripePaymentId: text("stripe_payment_id"),
   stripePaymentUrl: text("stripe_payment_url"),
   stripeReceiptUrl: text("stripe_receipt_url"),
-  paymentMethod: text("payment_method").notNull().default("credit_card"), // Add payment method field
-  checkReceivedDate: timestamp("check_received_date"), // Add field to track when check was received
-  checkNumber: text("check_number"), // Add field to track check number
+  paymentMethod: text("payment_method").notNull().default("credit_card"),
+  checkReceivedDate: timestamp("check_received_date"),
+  checkNumber: text("check_number"),
 });
 
 export const invoiceItems = pgTable("invoice_items", {
@@ -59,7 +59,6 @@ export const settings = pgTable("settings", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).notNull().default('10'),
 });
 
-// Update schema exports and types
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -86,7 +85,7 @@ export const insertInvoiceSchema = createInsertSchema(invoices)
     amount: z.coerce.number().positive(),
     paymentMethod: z.enum(["credit_card", "check"]).default("credit_card"),
     checkNumber: z.string().optional(),
-    checkReceivedDate: z.date().optional(),
+    checkReceivedDate: z.string().transform((date) => date ? new Date(date) : undefined).optional(),
   });
 
 export const insertInvoiceItemSchema = createInsertSchema(invoiceItems)

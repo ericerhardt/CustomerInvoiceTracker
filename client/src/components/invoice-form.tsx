@@ -80,7 +80,8 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
           ...data,
           paymentMethod: payByCheck ? "check" : "credit_card",
           checkNumber: payByCheck ? data.checkNumber : undefined,
-          checkReceivedDate: payByCheck && checkReceived ? new Date(data.checkReceivedDate) : undefined,
+          // Send the date string directly, let the schema handle conversion
+          checkReceivedDate: payByCheck && checkReceived ? data.checkReceivedDate : undefined,
           items: items.map(item => ({
             ...item,
             quantity: Number(item.quantity),
@@ -100,6 +101,9 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
         title: "Success",
         description: invoice ? "Invoice updated successfully" : "Invoice created successfully",
       });
+      if (onSuccess) {
+        onSuccess();
+      }
       setLocation("/");
     },
     onError: (error: Error) => {
