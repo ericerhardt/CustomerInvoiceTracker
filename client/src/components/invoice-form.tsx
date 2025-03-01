@@ -60,14 +60,14 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
     defaultValues: {
       customerId: invoice?.customerId || 0,
       amount: invoice?.amount || 0,
-      dueDate: invoice?.dueDate 
+      dueDate: invoice?.dueDate
         ? new Date(invoice.dueDate).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
       paymentMethod: invoice?.paymentMethod || "credit_card",
       checkNumber: invoice?.checkNumber || "",
       checkReceivedDate: invoice?.checkReceivedDate
         ? new Date(invoice.checkReceivedDate).toISOString().split('T')[0]
-        : undefined,
+        : new Date().toISOString().split('T')[0],
     },
   });
 
@@ -76,11 +76,11 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
       const res = await apiRequest(
         invoice ? "PATCH" : "POST",
         invoice ? `/api/invoices/${invoice.id}` : "/api/invoices",
-        { 
+        {
           ...data,
           paymentMethod: payByCheck ? "check" : "credit_card",
           checkNumber: payByCheck ? data.checkNumber : undefined,
-          checkReceivedDate: payByCheck && checkReceived ? data.checkReceivedDate : undefined,
+          checkReceivedDate: payByCheck && checkReceived ? new Date(data.checkReceivedDate) : undefined,
           items: items.map(item => ({
             ...item,
             quantity: Number(item.quantity),
@@ -216,8 +216,8 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
                     <FormItem>
                       <FormLabel>Check Received Date</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="date" 
+                        <Input
+                          type="date"
                           {...field}
                           value={field.value || new Date().toISOString().split('T')[0]}
                         />
@@ -237,8 +237,8 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
               <FormItem>
                 <FormLabel>Due Date</FormLabel>
                 <FormControl>
-                  <Input 
-                    type="date" 
+                  <Input
+                    type="date"
                     {...field}
                   />
                 </FormControl>
@@ -288,11 +288,11 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
               <FormItem>
                 <FormLabel>Total Amount</FormLabel>
                 <FormControl>
-                  <Input 
-                    type="number" 
+                  <Input
+                    type="number"
                     {...field}
                     value={field.value}
-                    readOnly 
+                    readOnly
                   />
                 </FormControl>
                 <FormMessage />
@@ -301,8 +301,8 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
           />
 
           <Button type="submit" className="w-full" disabled={createInvoice.isPending}>
-            {createInvoice.isPending 
-              ? (invoice ? "Updating..." : "Creating...") 
+            {createInvoice.isPending
+              ? (invoice ? "Updating..." : "Creating...")
               : (invoice ? "Update Invoice" : "Create Invoice")}
           </Button>
         </form>

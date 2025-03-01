@@ -158,9 +158,10 @@ export class DatabaseStorage implements IStorage {
       createdAt: new Date(),
       stripePaymentId: null,
       stripePaymentUrl: null,
+      stripeReceiptUrl: null,
       paymentMethod: invoice.paymentMethod,
       checkNumber: invoice.checkNumber,
-      checkReceivedDate: invoice.checkReceivedDate
+      checkReceivedDate: invoice.checkReceivedDate ? new Date(invoice.checkReceivedDate) : null
     }).returning();
 
     return newInvoice;
@@ -197,16 +198,25 @@ export class DatabaseStorage implements IStorage {
       userId: invoice.userId,
       paymentMethod: invoice.paymentMethod,
       checkNumber: invoice.checkNumber,
-      checkReceivedDate: invoice.checkReceivedDate,
+      checkReceivedDate: invoice.checkReceivedDate ? new Date(invoice.checkReceivedDate) : null,
       // Update status to 'paid' if check is received
       status: invoice.paymentMethod === 'check' && invoice.checkReceivedDate ? 'paid' : 'pending'
     };
+
+    console.log('Updating invoice with data:', {
+      id,
+      ...updateData,
+      checkReceivedDate: updateData.checkReceivedDate?.toISOString(),
+      status: updateData.status
+    });
 
     const [updatedInvoice] = await db
       .update(invoices)
       .set(updateData)
       .where(and(eq(invoices.id, id), eq(invoices.userId, invoice.userId)))
       .returning();
+
+    console.log('Updated invoice:', updatedInvoice);
     return updatedInvoice;
   }
 
