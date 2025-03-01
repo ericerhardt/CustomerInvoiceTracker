@@ -13,8 +13,10 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -34,6 +36,7 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [items, setItems] = useState([{ description: "", quantity: 1, unitPrice: 0 }]);
+  const [payByCheck, setPayByCheck] = useState(false);
 
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
@@ -42,6 +45,9 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
   useEffect(() => {
     if (invoice?.items) {
       setItems(invoice.items);
+    }
+    if (invoice?.paymentMethod === "check") {
+      setPayByCheck(true);
     }
   }, [invoice]);
 
@@ -53,6 +59,7 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
       dueDate: invoice?.dueDate 
         ? new Date(invoice.dueDate).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
+      paymentMethod: invoice?.paymentMethod || "credit_card",
     },
   });
 
@@ -63,6 +70,7 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
         invoice ? `/api/invoices/${invoice.id}` : "/api/invoices",
         { 
           ...data,
+          paymentMethod: payByCheck ? "check" : "credit_card",
           items: items.map(item => ({
             ...item,
             quantity: Number(item.quantity),
@@ -143,6 +151,21 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
               </FormItem>
             )}
           />
+
+          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <FormLabel>Pay by Check</FormLabel>
+              <FormDescription>
+                Toggle to enable payment by check instead of credit card
+              </FormDescription>
+            </div>
+            <FormControl>
+              <Switch
+                checked={payByCheck}
+                onCheckedChange={setPayByCheck}
+              />
+            </FormControl>
+          </FormItem>
 
           <FormField
             control={form.control}

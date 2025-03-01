@@ -157,7 +157,8 @@ export class DatabaseStorage implements IStorage {
       dueDate: new Date(invoice.dueDate),
       createdAt: new Date(),
       stripePaymentId: null,
-      stripePaymentUrl: null
+      stripePaymentUrl: null,
+      paymentMethod: invoice.paymentMethod || 'credit_card'
     }).returning();
 
     return newInvoice;
@@ -192,7 +193,8 @@ export class DatabaseStorage implements IStorage {
       amount: invoice.amount.toString(),
       status: invoice.status || 'pending',
       dueDate: new Date(invoice.dueDate),
-      userId: invoice.userId
+      userId: invoice.userId,
+      paymentMethod: invoice.paymentMethod
     };
 
     const [updatedInvoice] = await db

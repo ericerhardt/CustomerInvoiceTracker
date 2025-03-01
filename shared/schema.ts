@@ -31,6 +31,7 @@ export const invoices = pgTable("invoices", {
   stripePaymentId: text("stripe_payment_id"),
   stripePaymentUrl: text("stripe_payment_url"),
   stripeReceiptUrl: text("stripe_receipt_url"),
+  paymentMethod: text("payment_method").notNull().default("credit_card"), // Add payment method field
 });
 
 export const invoiceItems = pgTable("invoice_items", {
@@ -81,6 +82,7 @@ export const insertInvoiceSchema = createInsertSchema(invoices)
   .extend({
     dueDate: z.coerce.date(),
     amount: z.coerce.number().positive(),
+    paymentMethod: z.enum(["credit_card", "check"]).default("credit_card"),
   });
 
 export const insertInvoiceItemSchema = createInsertSchema(invoiceItems)

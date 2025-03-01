@@ -6,9 +6,10 @@ interface SendInvoiceEmailParams {
   invoiceNumber: string;
   amount: number;
   dueDate: Date;
-  paymentUrl: string;
+  paymentUrl?: string;
   pdfBuffer?: Buffer;
   userId: number;
+  paymentMethod: 'credit_card' | 'check';
 }
 
 interface SendPasswordResetEmailParams {
@@ -26,6 +27,7 @@ export async function sendInvoiceEmail({
   paymentUrl,
   pdfBuffer,
   userId,
+  paymentMethod,
 }: SendInvoiceEmailParams) {
   const formattedAmount = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -41,7 +43,6 @@ export async function sendInvoiceEmail({
 
     // Get settings from database
     const settings = await storage.getSettingsByUserId(userId);
-    console.log('Settings:', settings);
     if (!settings?.sendGridApiKey) {
       throw new Error('SendGrid API key not configured in settings');
     }
@@ -51,13 +52,26 @@ export async function sendInvoiceEmail({
     if (!settings.sendGridApiKey.startsWith('SG.')) {
       throw new Error('Invalid SendGrid API key format in settings. Must start with "SG."');
     }
-    
+
     const apiKey = settings.sendGridApiKey;
     const fromEmail = settings.sendGridFromEmail;
     const companyName = settings.companyName || 'Invoice System';
 
     console.log('Configuring SendGrid with API key and attempting to send to:', to);
     sgMail.setApiKey(apiKey);
+
+    const paymentInstructions = paymentMethod === 'check'
+      ? `Please make your check payable to "${companyName}" and mail it to:\n${settings.companyAddress}`
+      : `Pay now: ${paymentUrl}`;
+
+    const paymentButton = paymentMethod === 'credit_card'
+      ? `<a href="${paymentUrl}" style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 16px;">Pay Now</a>`
+      : `<div style="margin-top: 16px; padding: 12px; background-color: #f5f5f5; border-radius: 4px;">
+          <p style="margin: 0;">Please make check payable to:</p>
+          <p style="margin: 8px 0; font-weight: bold;">${companyName}</p>
+          <p style="margin: 0;">Mail to:</p>
+          <p style="margin: 8px 0;">${settings.companyAddress}</p>
+        </div>`;
 
     const msg = {
       to,
@@ -66,17 +80,13 @@ export async function sendInvoiceEmail({
         name: companyName
       },
       subject: `Invoice ${invoiceNumber} - Payment Required`,
-      text: `Amount due: ${formattedAmount}\nDue date: ${formattedDate}\nPay now: ${paymentUrl}`,
+      text: `Amount due: ${formattedAmount}\nDue date: ${formattedDate}\n${paymentInstructions}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Invoice ${invoiceNumber}</h2>
           <p>Amount due: ${formattedAmount}</p>
           <p>Due date: ${formattedDate}</p>
-          <p>
-            <a href="${paymentUrl}" style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 16px;">
-              Pay Now
-            </a>
-          </p>
+          ${paymentButton}
         </div>
       `,
       attachments: pdfBuffer ? [
