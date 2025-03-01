@@ -153,12 +153,14 @@ export class DatabaseStorage implements IStorage {
       userId: invoice.userId,
       customerId: invoice.customerId,
       amount: invoice.amount.toString(),
-      status: invoice.status || 'pending',
+      status: invoice.paymentMethod === 'check' && invoice.checkReceivedDate ? 'paid' : 'pending',
       dueDate: new Date(invoice.dueDate),
       createdAt: new Date(),
       stripePaymentId: null,
       stripePaymentUrl: null,
-      paymentMethod: invoice.paymentMethod || 'credit_card'
+      paymentMethod: invoice.paymentMethod,
+      checkNumber: invoice.checkNumber,
+      checkReceivedDate: invoice.checkReceivedDate
     }).returning();
 
     return newInvoice;
@@ -191,10 +193,13 @@ export class DatabaseStorage implements IStorage {
     const updateData = {
       customerId: invoice.customerId,
       amount: invoice.amount.toString(),
-      status: invoice.status || 'pending',
       dueDate: new Date(invoice.dueDate),
       userId: invoice.userId,
-      paymentMethod: invoice.paymentMethod
+      paymentMethod: invoice.paymentMethod,
+      checkNumber: invoice.checkNumber,
+      checkReceivedDate: invoice.checkReceivedDate,
+      // Update status to 'paid' if check is received
+      status: invoice.paymentMethod === 'check' && invoice.checkReceivedDate ? 'paid' : 'pending'
     };
 
     const [updatedInvoice] = await db
