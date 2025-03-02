@@ -87,7 +87,7 @@ export async function sendInvoiceEmail({
     };
 
     // Add PDF attachment if buffer exists
-    if (pdfBuffer && pdfBuffer.length > 0) {
+    if (pdfBuffer && Buffer.isBuffer(pdfBuffer) && pdfBuffer.length > 0) {
       msg.attachments = [{
         content: pdfBuffer.toString('base64'),
         filename: `invoice-${invoiceNumber}.pdf`,

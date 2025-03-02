@@ -414,7 +414,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         const items = await storage.getInvoiceItems(invoice.id);
         pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
-        console.log('Generated PDF buffer:', !!pdfBuffer);
+        console.log('Generated PDF buffer:', !!pdfBuffer, 'size:', pdfBuffer?.length);
+        if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
+          console.error('PDF generation produced invalid buffer');
+        }
       } catch (pdfError) {
         console.error('Failed to generate PDF:', pdfError);
       }
