@@ -729,7 +729,7 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
       } : undefined
     });
 
-    // Import PDF generation function
+    // Import PDF generation function using dynamic import
     const { pdf } = await import('@react-pdf/renderer');
 
     // Generate PDF buffer
