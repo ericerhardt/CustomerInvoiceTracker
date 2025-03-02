@@ -4,7 +4,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import Stripe from "stripe";
 import React from 'react';
-import { Document } from '@react-pdf/renderer';
+import { Document, pdf } from '@react-pdf/renderer';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
 import type { InvoiceItem } from "@shared/schema";
 import express from "express";
@@ -12,7 +12,7 @@ import { users } from "@shared/schema";
 import { db } from "./db";
 import { sendInvoiceEmail } from "./email";
 import { session } from "passport";
-import { renderToStream, pdf } from '@react-pdf/renderer';
+
 
 // Update the getStripe helper function to include better error handling
 async function getStripe(userId: number) {
@@ -719,76 +719,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
+
 // Helper function for generating PDF
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any): Promise<Buffer> {
   try {
-    console.log('Starting PDF generation for invoice:', {
-      invoiceNumber: invoice.number,
-      customerId: customer.id,
-      itemCount: items.length,
-      hasSettings: !!settings
+    console.log('Starting PDF generation with data:', {
+      hasItems: items?.length > 0,
+      hasCustomer: !!customer,
+      hasInvoice: !!invoice,
+      hasSettings: !!settings,
+      dueDate: invoice?.dueDate,
+      invoiceNumber: invoice?.number
     });
 
-    // Create the PDF component with all required data
-    const pdfComponent = React.createElement(InvoicePDF, {
-      items: items.map(item => ({
-        description: item.description,
-        quantity: Number(item.quantity),
-        unitPrice: Number(item.unitPrice)
-      })),
-      customer,
-      dueDate: invoice.dueDate.toISOString(),
-      invoiceNumber: invoice.number,
-      settings: settings ? {
-        companyName: settings.companyName || '',
-        companyAddress: settings.companyAddress || '',
-        companyEmail: settings.companyEmail || '',
-        taxRate: Number(settings.taxRate || 10), // Default to 10% if not set
-      } : undefined
-    });
+    if (!items?.length || !customer || !invoice) {
+      throw new Error('Missing required data for PDF generation');
+    }
+
+    // Ensure all numeric values are properly converted
+    const formattedItems = items.map(item => ({
+      description: item.description,
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice)
+    }));
+
+    // Format settings to ensure all required fields exist
+    const formattedSettings = settings ? {
+      companyName: settings.companyName || '',
+      companyAddress: settings.companyAddress || '',
+      companyEmail: settings.companyEmail || '',
+      taxRate: Number(settings.taxRate || 10)
+    } : undefined;
 
     try {
-      console.log('Creating PDF document...');
-      // Create PDF document with proper type
-      const doc = React.createElement(Document, {}, pdfComponent);
+      console.log('Creating PDF component with:', {
+        itemsCount: formattedItems.length,
+        dueDate: invoice.dueDate,
+        invoiceNumber: invoice.number
+      });
 
-      console.log('Generating PDF buffer...');
-      // Generate PDF buffer
-      const pdfDoc = await pdf(doc).toBuffer();
+      // Create a simple test PDF first to verify basic functionality
+      const testPdf = await pdf(
+        React.createElement(Document, {},
+          React.createElement(Page, { size: "A4" },
+            React.createElement(View, {},
+              React.createElement(Text, {}, "Test PDF Generation")
+            )
+          )
+        )
+      ).toBuffer();
 
-      if (!Buffer.isBuffer(pdfDoc) || pdfDoc.length === 0) {
-        console.error('PDF generation failed - invalid buffer');
+      if (!Buffer.isBuffer(testPdf)) {
+        throw new Error('Test PDF generation failed');
+      }
+
+      console.log('Test PDF generated successfully, attempting full invoice PDF');
+
+      // If test succeeds, generate the full invoice PDF
+      const pdfBuffer = await pdf(
+        React.createElement(InvoicePDF, {
+          items: formattedItems,
+          customer,
+          dueDate: invoice.dueDate,
+          invoiceNumber: invoice.number,
+          settings: formattedSettings
+        })
+      ).toBuffer();
+
+      if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
         throw new Error('PDF generation produced invalid buffer');
       }
 
       console.log('PDF generated successfully:', {
-        bufferSize: pdfDoc.length,
-        isBuffer: Buffer.isBuffer(pdfDoc)
+        bufferSize: pdfBuffer.length,
+        isBuffer: Buffer.isBuffer(pdfBuffer)
       });
 
-      return pdfDoc;
+      return pdfBuffer;
     } catch (error) {
-      const pdfError = error as Error;
       console.error('PDF rendering failed:', {
-        error: pdfError.message,
-        stack: pdfError.stack,
-        componentData: {
-          hasItems: items.length > 0,
-          customerPresent: !!customer,
-          settingsPresent: !!settings
-        }
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        errorType: error?.constructor?.name,
+        errorKeys: error ? Object.keys(error) : []
       });
-      throw new Error(`PDF rendering failed: ${pdfError.message}`);
+      throw error;
     }
   } catch (error) {
     console.error('PDF generation failed:', {
       error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      invoiceNumber: invoice?.number
+      stack: error instanceof Error ? error.stack : undefined
     });
-    if (error instanceof Error) {
-      throw new Error(`PDF generation failed: ${error.message}`);
-    }
-    throw new Error('PDF generation failed with unknown error');
+    throw error;
   }
 }

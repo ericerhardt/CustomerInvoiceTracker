@@ -1,6 +1,25 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
 import type { Customer } from "@shared/schema";
+
+// Register a fallback font that's guaranteed to work
+Font.register({
+  family: 'Roboto',
+  fonts: [
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf',
+      fontWeight: 300,
+    },
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf',
+      fontWeight: 400,
+    },
+    {
+      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-medium-webfont.ttf',
+      fontWeight: 500,
+    },
+  ],
+});
 
 interface InvoicePDFProps {
   items: Array<{
@@ -19,11 +38,11 @@ interface InvoicePDFProps {
   };
 }
 
-// Styles remain unchanged
 const styles = StyleSheet.create({
   page: {
     padding: 30,
     fontSize: 12,
+    fontFamily: 'Roboto',
   },
   header: {
     flexDirection: "row",
@@ -32,7 +51,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: "bold",
+    fontWeight: 500,
     marginBottom: 10,
   },
   section: {
@@ -52,7 +71,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   bold: {
-    fontWeight: "bold",
+    fontWeight: 500,
   },
   total: {
     marginTop: 20,
@@ -76,7 +95,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }: InvoicePDFProps) {
+export const InvoicePDF: React.FC<InvoicePDFProps> = ({ items, customer, dueDate, invoiceNumber, settings }) => {
   // Ensure all numeric calculations are properly handled
   const subtotal = items.reduce((sum, item) => {
     return sum + (Number(item.quantity) * Number(item.unitPrice));
@@ -86,6 +105,8 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }
   const tax = Number((subtotal * taxRate).toFixed(2));
   const total = Number((subtotal + tax).toFixed(2));
 
+  const formattedDate = new Date(dueDate).toLocaleDateString();
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -93,7 +114,7 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }
           <View>
             <Text style={styles.title}>INVOICE</Text>
             <Text>Invoice Number: {invoiceNumber}</Text>
-            <Text>Due Date: {new Date(dueDate).toLocaleDateString()}</Text>
+            <Text>Due Date: {formattedDate}</Text>
           </View>
           <View>
             <Text style={styles.bold}>{settings?.companyName || 'Your Company Name'}</Text>
@@ -137,7 +158,7 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }
               <Text style={styles.totalValue}>${subtotal.toFixed(2)}</Text>
             </View>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Tax ({(taxRate * 100).toFixed(2)}%):</Text>
+              <Text style={styles.totalLabel}>Tax ({(taxRate * 100).toFixed(1)}%):</Text>
               <Text style={styles.totalValue}>${tax.toFixed(2)}</Text>
             </View>
             <View style={styles.totalRow}>
@@ -154,4 +175,4 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }
       </Page>
     </Document>
   );
-}
+};
