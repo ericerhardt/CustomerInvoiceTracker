@@ -770,108 +770,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      console.log('Starting PDF generation with data:', {
-        hasItems: items?.length > 0,
-        hasCustomer: !!customer,
-        hasInvoice: !!invoice,
-        hasSettings: !!settings,
-        dueDate: invoice?.dueDate,
-        invoiceNumber: invoice?.number
-      });
-
-      // Create a new PDF document
-      const doc = new PDFDocument({ margin: 50 });
-
-      // Create a buffer to store the PDF
-      const chunks: Buffer[] = [];
-      doc.on('data', chunk => chunks.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(chunks)));
-      doc.on('error', reject);
-
-      // Add company information
-      doc.fontSize(24).text('INVOICE', { align: 'center' });
-      doc.moveDown();
-      doc.fontSize(12);
-
-      // Company details
-      doc.text(settings?.companyName || 'Your Company Name');
-      doc.text(settings?.companyAddress || '');
-      doc.text(settings?.companyEmail || '');
-      doc.moveDown();
-
-      // Invoice details
-      doc.text(`Invoice Number: ${invoice.number}`);
-      doc.text(`Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}`);
-      doc.moveDown();
-
-      // Customer information
-      if (customer) {
-        doc.text('Bill To:');
-        doc.text(customer.name);
-        doc.text(customer.address || '');
-        doc.text(customer.email);
-        doc.text(customer.phone || '');
-        doc.moveDown();
-      }
-
-      // Invoice items
-      const itemsStartY = doc.y;
-      let currentY = itemsStartY;
-
-      // Headers
-      const colWidths = {
-        description: 250,
-        quantity: 50,
-        unitPrice: 100,
-        amount: 100
-      };
-
-      doc.text('Description', doc.x, currentY);
-      doc.text('Qty', doc.x + colWidths.description, currentY);
-      doc.text('Unit Price', doc.x + colWidths.description + colWidths.quantity, currentY);
-      doc.text('Amount', doc.x + colWidths.description + colWidths.quantity + colWidths.unitPrice, currentY);
-
-      currentY += 20;
-
-      // Calculate totals
-      let subtotal = 0;
-
-      // Items
-      items.forEach(item => {
-        const amount = Number(item.quantity) * Number(item.unitPrice);
-        subtotal += amount;
-
-        doc.text(item.description, doc.x, currentY);
-        doc.text(item.quantity.toString(), doc.x + colWidths.description, currentY);
-        doc.text(`$${Number(item.unitPrice).toFixed(2)}`, doc.x + colWidths.description + colWidths.quantity, currentY);
-        doc.text(`$${amount.toFixed(2)}`, doc.x + colWidths.description + colWidths.quantity + colWidths.unitPrice, currentY);
-
-        currentY += 20;
-      });
-
-      doc.moveDown();
-
-      // Totals
-      const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1;
-      const tax = subtotal * taxRate;
-      const total = subtotal + tax;
-
-      doc.text(`Subtotal: $${subtotal.toFixed(2)}`, { align: 'right' });
-      doc.text(`Tax (${(taxRate * 100).toFixed(1)}%): $${tax.toFixed(2)}`, { align: 'right' });
-      doc.text(`Total: $${total.toFixed(2)}`, { align: 'right' });
-
-      doc.moveDown();
-      doc.text('Payment Terms', { underline: true });
-      doc.text('Please pay within 30 days of receiving this invoice.');
-
-      // Finalize the PDF
-      doc.end();
-
+      console.log('PDF generation temporarily disabled, returning dummy buffer');
+      // Return a dummy buffer instead of generating PDF
+      resolve(Buffer.from('PDF generation temporarily disabled'));
     } catch (error) {
-      console.error('PDF generation failed:', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
+      console.error('Error in dummy PDF generation:', error);
       reject(error);
     }
   });
