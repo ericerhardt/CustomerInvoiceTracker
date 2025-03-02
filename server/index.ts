@@ -46,19 +46,46 @@ apiRouter.use((req, res, next) => {
 // Mount the API router before route registration
 app.use('/api', apiRouter);
 
-// Global error handler
+// Global error handler with detailed logging
 const errorHandler = (err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('Global error:', err);
+  console.error('Global error:', {
+    message: err.message,
+    stack: err.stack,
+    status: err.status || err.statusCode,
+    name: err.name,
+    code: err.code
+  });
+
   const status = err.status || err.statusCode || 500;
   const message = err.message || "Internal Server Error";
   res.status(status).json({ message });
 };
+
+// Check if port is in use
+async function isPortInUse(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer()
+      .once('error', () => resolve(true))
+      .once('listening', () => {
+        server.close();
+        resolve(false);
+      })
+      .listen(port, '0.0.0.0');
+  });
+}
 
 // Initialize server with proper error handling
 async function startServer() {
   try {
     console.log('Starting server initialization...');
     const PORT = 5000;
+
+    // Check if port is already in use
+    const portInUse = await isPortInUse(PORT);
+    if (portInUse) {
+      console.error(`Port ${PORT} is already in use. Please free up the port and try again.`);
+      process.exit(1);
+    }
 
     // Verify database connection first
     console.log('Verifying database connection...');
@@ -82,10 +109,18 @@ async function startServer() {
       console.log('Static file serving setup completed');
     }
 
-    // Start the server
+    // Start the server with detailed error handling
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`🚀 Server running on port ${PORT}`);
       log(`Server running on port ${PORT}`);
+    }).on('error', (error: any) => {
+      console.error('Server failed to start:', {
+        error: error.message,
+        code: error.code,
+        syscall: error.syscall,
+        port: error.port
+      });
+      process.exit(1);
     });
 
     // Handle graceful shutdown
@@ -98,18 +133,18 @@ async function startServer() {
     });
 
   } catch (error) {
-    console.error('Failed to start server:', error);
-    if (error instanceof Error) {
-      console.error('Error stack:', error.stack);
-    }
+    console.error('Failed to start server:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     process.exit(1);
   }
 }
 
 startServer().catch((error) => {
-  console.error('Unhandled server startup error:', error);
-  if (error instanceof Error) {
-    console.error('Error stack:', error.stack);
-  }
+  console.error('Unhandled server startup error:', {
+    error: error instanceof Error ? error.message : 'Unknown error',
+    stack: error instanceof Error ? error.stack : undefined
+  });
   process.exit(1);
 });

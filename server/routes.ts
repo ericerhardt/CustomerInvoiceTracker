@@ -109,7 +109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             try {
               // Add receipt URL parameter
               await storage.updateInvoiceStatus(
-                parseInt(invoiceId), 
+                parseInt(invoiceId),
                 'paid',
                 session.receipt_url || '' // Add the missing receipt URL parameter
               );
@@ -722,7 +722,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Helper function for generating PDF
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any): Promise<Buffer> {
   try {
-    console.log('Starting PDF generation for invoice:', invoice.number);
+    console.log('Starting PDF generation for invoice:', {
+      invoiceNumber: invoice.number,
+      customerId: customer.id,
+      itemCount: items.length,
+      hasSettings: !!settings
+    });
 
     // Create the PDF component with all required data
     const pdfComponent = React.createElement(InvoicePDF, {
@@ -743,28 +748,44 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
     });
 
     try {
+      console.log('Creating PDF document...');
       // Create PDF document with proper type
       const doc = React.createElement(Document, {}, pdfComponent);
 
+      console.log('Generating PDF buffer...');
       // Generate PDF buffer
       const pdfDoc = await pdf(doc).toBuffer();
 
       if (!Buffer.isBuffer(pdfDoc) || pdfDoc.length === 0) {
+        console.error('PDF generation failed - invalid buffer');
         throw new Error('PDF generation produced invalid buffer');
       }
 
-      console.log('PDF generated successfully, buffer size:', pdfDoc.length);
+      console.log('PDF generated successfully:', {
+        bufferSize: pdfDoc.length,
+        isBuffer: Buffer.isBuffer(pdfDoc)
+      });
+
       return pdfDoc;
     } catch (error) {
       const pdfError = error as Error;
       console.error('PDF rendering failed:', {
         error: pdfError.message,
-        stack: pdfError.stack
+        stack: pdfError.stack,
+        componentData: {
+          hasItems: items.length > 0,
+          customerPresent: !!customer,
+          settingsPresent: !!settings
+        }
       });
       throw new Error(`PDF rendering failed: ${pdfError.message}`);
     }
   } catch (error) {
-    console.error('PDF generation failed:', error);
+    console.error('PDF generation failed:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      invoiceNumber: invoice?.number
+    });
     if (error instanceof Error) {
       throw new Error(`PDF generation failed: ${error.message}`);
     }
