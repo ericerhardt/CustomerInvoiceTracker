@@ -43,6 +43,11 @@ apiRouter.use((req, res, next) => {
   next();
 });
 
+// Add health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 // Mount the API router before route registration
 app.use('/api', apiRouter);
 
@@ -61,13 +66,34 @@ const errorHandler = (err: any, _req: Request, res: Response, _next: NextFunctio
   res.status(status).json({ message });
 };
 
+// Find and kill process using a specific port
+async function killProcessOnPort(port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    console.log(`Attempting to kill process on port ${port}...`);
+    exec(`lsof -i :${port} -t | xargs kill -9`, (error, stdout, stderr) => {
+      if (error) {
+        console.log(`No process was running on port ${port}`);
+      } else {
+        console.log(`Killed process on port ${port}`);
+        if (stdout) console.log('Process output:', stdout);
+        if (stderr) console.error('Process errors:', stderr);
+      }
+      resolve();
+    });
+  });
+}
+
 // Check if port is in use
 async function isPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer()
-      .once('error', () => resolve(true))
+      .once('error', () => {
+        console.log(`Port ${port} is already in use`);
+        resolve(true);
+      })
       .once('listening', () => {
         server.close();
+        console.log(`Port ${port} is available`);
         resolve(false);
       })
       .listen(port, '0.0.0.0');
@@ -83,8 +109,10 @@ async function startServer() {
     // Check if port is already in use
     const portInUse = await isPortInUse(PORT);
     if (portInUse) {
-      console.error(`Port ${PORT} is already in use. Please free up the port and try again.`);
-      process.exit(1);
+      console.log(`Port ${PORT} is in use. Attempting to free it...`);
+      await killProcessOnPort(PORT);
+      // Wait a moment for the port to be freed
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     // Verify database connection first
