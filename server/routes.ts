@@ -4,6 +4,7 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import Stripe from "stripe";
 import React from 'react';
+import { Document } from '@react-pdf/renderer';
 import { InvoicePDF } from '../client/src/components/InvoicePDF';
 import type { InvoiceItem } from "@shared/schema";
 import express from "express";
@@ -11,6 +12,7 @@ import { users } from "@shared/schema";
 import { db } from "./db";
 import { sendInvoiceEmail } from "./email";
 import { session } from "passport";
+import { renderToStream, pdf } from '@react-pdf/renderer';
 
 // Update the getStripe helper function to include better error handling
 async function getStripe(userId: number) {
@@ -105,11 +107,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           if (invoiceId) {
             try {
-              await storage.updateInvoiceStatus(parseInt(invoiceId), 'paid');
+              // Add receipt URL parameter
+              await storage.updateInvoiceStatus(
+                parseInt(invoiceId), 
+                'paid',
+                session.receipt_url || '' // Add the missing receipt URL parameter
+              );
               console.log(`Successfully updated invoice ${invoiceId} status to paid (via checkout)`);
             } catch (updateError) {
               console.error(`Failed to update invoice ${invoiceId} status:`, updateError);
-              throw updateError; // Re-throw to trigger error handling
+              throw updateError;
             }
           } else {
             console.warn('No invoiceId found in checkout session metadata');
@@ -712,10 +719,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
-// Generate PDF
-
 // Helper function for generating PDF
-async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
+async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any): Promise<Buffer> {
   try {
     console.log('Starting PDF generation for invoice:', invoice.number);
 
@@ -733,38 +738,36 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
         companyName: settings.companyName || '',
         companyAddress: settings.companyAddress || '',
         companyEmail: settings.companyEmail || '',
-        taxRate: Number(settings.taxRate) || 0,
+        taxRate: Number(settings.taxRate || 10), // Default to 10% if not set
       } : undefined
     });
 
-    // Import PDF generation function using dynamic import
-    const { pdf, Document } = await import('@react-pdf/renderer');
-    // Wrap in Document component for proper PDF generation
-    const document = React.createElement(
-      Document,
-      null,
-      pdfComponent
-    );
-
     try {
-      // Generate PDF buffer with explicit await
-      // Modify the function where the `pdfComponent` is created:
-      
-      const pdfDoc = pdf(document);
-      const buffer = await pdfDoc.toBuffer();
+      // Create PDF document with proper type
+      const doc = React.createElement(Document, {}, pdfComponent);
 
-      if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
-        throw new Error('PDF generation failed - invalid buffer');
+      // Generate PDF buffer
+      const pdfDoc = await pdf(doc).toBuffer();
+
+      if (!Buffer.isBuffer(pdfDoc) || pdfDoc.length === 0) {
+        throw new Error('PDF generation produced invalid buffer');
       }
 
-      console.log('PDF generated successfully, buffer size:', buffer.length);
-      return buffer;
-    } catch (pdfRenderError) {
-      console.error('PDF rendering failed:', pdfRenderError);
-      throw new Error(`PDF rendering failed: ${pdfRenderError.message}`);
+      console.log('PDF generated successfully, buffer size:', pdfDoc.length);
+      return pdfDoc;
+    } catch (error) {
+      const pdfError = error as Error;
+      console.error('PDF rendering failed:', {
+        error: pdfError.message,
+        stack: pdfError.stack
+      });
+      throw new Error(`PDF rendering failed: ${pdfError.message}`);
     }
   } catch (error) {
     console.error('PDF generation failed:', error);
-    throw error;
+    if (error instanceof Error) {
+      throw new Error(`PDF generation failed: ${error.message}`);
+    }
+    throw new Error('PDF generation failed with unknown error');
   }
 }

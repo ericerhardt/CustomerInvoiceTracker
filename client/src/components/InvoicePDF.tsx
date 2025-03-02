@@ -1,6 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
-import { Customer } from "@shared/schema";
+import type { Customer } from "@shared/schema";
 
 interface InvoicePDFProps {
   items: Array<{
@@ -19,7 +19,7 @@ interface InvoicePDFProps {
   };
 }
 
-// Create styles
+// Styles remain unchanged
 const styles = StyleSheet.create({
   page: {
     padding: 30,
@@ -77,14 +77,14 @@ const styles = StyleSheet.create({
 });
 
 export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }: InvoicePDFProps) {
+  // Ensure all numeric calculations are properly handled
   const subtotal = items.reduce((sum, item) => {
-    const quantity = Number(item.quantity);
-    const price = Number(item.unitPrice);
-    return sum + (quantity * price);
+    return sum + (Number(item.quantity) * Number(item.unitPrice));
   }, 0);
+
   const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1;
-  const tax = Number((subtotal * taxRate).toFixed(2)); // Fix to 2 decimal places
-  const total = Number((subtotal + tax).toFixed(2)); // Fix to 2 decimal places
+  const tax = Number((subtotal * taxRate).toFixed(2));
+  const total = Number((subtotal + tax).toFixed(2));
 
   return (
     <Document>
@@ -123,7 +123,7 @@ export function InvoicePDF({ items, customer, dueDate, invoiceNumber, settings }
           {items.map((item, index) => (
             <View key={index} style={styles.row}>
               <Text style={styles.columnLeft}>{item.description}</Text>
-              <Text style={styles.columnRight}>{Number(item.quantity)}</Text>
+              <Text style={styles.columnRight}>{item.quantity}</Text>
               <Text style={styles.columnRight}>${Number(item.unitPrice).toFixed(2)}</Text>
               <Text style={styles.columnRight}>
                 ${(Number(item.quantity) * Number(item.unitPrice)).toFixed(2)}

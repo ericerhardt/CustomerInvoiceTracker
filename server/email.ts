@@ -12,6 +12,13 @@ interface SendInvoiceEmailParams {
   paymentMethod: 'credit_card' | 'check';
 }
 
+interface SendPasswordResetEmailParams {
+  to: string;
+  resetToken: string;
+  resetUrl: string;
+  userId: number;
+}
+
 export async function sendInvoiceEmail({
   to,
   invoiceNumber,
@@ -73,7 +80,7 @@ export async function sendInvoiceEmail({
           <h2>Invoice ${invoiceNumber}</h2>
           <p>Amount due: ${formattedAmount}</p>
           <p>Due date: ${formattedDate}</p>
-          ${paymentMethod === 'credit_card' && paymentUrl 
+          ${paymentMethod === 'credit_card' && paymentUrl
             ? `<a href="${paymentUrl}" style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 16px;">Pay Now</a>`
             : `<div style="margin-top: 16px; padding: 12px; background-color: #f5f5f5; border-radius: 4px;">
                 <p style="margin: 0;">Please make check payable to:</p>
@@ -93,7 +100,7 @@ export async function sendInvoiceEmail({
         if (!base64Content) {
           throw new Error("Failed to convert buffer to base64");
         }
-        
+
         msg.attachments = [{
           content: base64Content,
           filename: `invoice-${invoiceNumber}.pdf`,

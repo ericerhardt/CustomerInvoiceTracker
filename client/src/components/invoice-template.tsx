@@ -35,9 +35,19 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
     const price = Number(item.unitPrice);
     return sum + (quantity * price);
   }, 0);
+
+  // Convert taxRate from string to number before calculations
   const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1; // Default to 10% if not set
   const tax = Number((subtotal * taxRate).toFixed(2)); // Fix to 2 decimal places
   const total = Number((subtotal + tax).toFixed(2)); // Fix to 2 decimal places
+
+  // Convert settings for PDF generation
+  const pdfSettings = settings ? {
+    companyName: settings.companyName,
+    companyAddress: settings.companyAddress,
+    companyEmail: settings.companyEmail,
+    taxRate: Number(settings.taxRate) // Pass as number to InvoicePDF
+  } : undefined;
 
   return (
     <Card className="bg-white">
@@ -67,7 +77,7 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
                   customer={customer}
                   dueDate={dueDate}
                   invoiceNumber={invoiceNumber}
-                  settings={settings}
+                  settings={pdfSettings}
                 />
               }
               fileName={`invoice-${invoiceNumber}.pdf`}
