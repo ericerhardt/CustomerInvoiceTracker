@@ -14,11 +14,157 @@ import PDFDocument from 'pdfkit';
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      console.log('PDF generation temporarily disabled, returning dummy buffer');
-      // Return a dummy buffer instead of generating PDF
-      resolve(Buffer.from('PDF generation temporarily disabled'));
+      console.log('Starting PDF generation with data:', {
+        itemsCount: items?.length,
+        customerInfo: customer ? {
+          name: customer.name,
+          email: customer.email
+        } : null,
+        invoiceInfo: invoice ? {
+          number: invoice.number,
+          dueDate: invoice.dueDate
+        } : null,
+        settingsInfo: settings ? {
+          companyName: settings.companyName,
+          taxRate: settings.taxRate
+        } : null
+      });
+
+      // Validate required data
+      if (!items?.length) throw new Error('No invoice items provided');
+      if (!invoice?.number) throw new Error('Invalid invoice number');
+      if (!customer?.name) throw new Error('Invalid customer information');
+
+      // Create a new PDF document
+      const doc = new PDFDocument({ 
+        margin: 50,
+        size: 'A4',
+        info: {
+          Title: `Invoice ${invoice.number}`,
+          Author: settings?.companyName || 'Invoice System'
+        }
+      });
+
+      // Create a buffer to store the PDF
+      const chunks: Buffer[] = [];
+      doc.on('data', chunk => {
+        console.log('Received PDF chunk of size:', chunk.length);
+        chunks.push(chunk);
+      });
+
+      doc.on('end', () => {
+        const finalBuffer = Buffer.concat(chunks);
+        console.log('PDF generation completed. Total size:', finalBuffer.length);
+        resolve(finalBuffer);
+      });
+
+      doc.on('error', (error) => {
+        console.error('PDFKit error:', error);
+        reject(error);
+      });
+
+      // Add company information
+      doc.fontSize(24).text('INVOICE', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12);
+
+      // Company details
+      doc.text(settings?.companyName || 'Your Company Name');
+      doc.text(settings?.companyAddress || '');
+      doc.text(settings?.companyEmail || '');
+      doc.moveDown();
+
+      // Invoice details
+      doc.text(`Invoice Number: ${invoice.number}`);
+      doc.text(`Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}`);
+      doc.moveDown();
+
+      // Customer information
+      doc.text('Bill To:');
+      doc.text(customer.name);
+      doc.text(customer.address || '');
+      doc.text(customer.email);
+      doc.moveDown();
+
+      // Invoice items table
+      const tableTop = doc.y;
+      const itemX = 50;
+      const quantityX = 300;
+      const priceX = 400;
+      const amountX = 500;
+
+      // Draw table headers
+      doc
+        .fontSize(10)
+        .text('Description', itemX, tableTop)
+        .text('Quantity', quantityX, tableTop)
+        .text('Price', priceX, tableTop)
+        .text('Amount', amountX, tableTop);
+
+      let y = tableTop + 20;
+
+      // Table content
+      let subtotal = 0;
+      items.forEach(item => {
+        const amount = Number(item.quantity) * Number(item.unitPrice);
+        subtotal += amount;
+
+        doc
+          .fontSize(10)
+          .text(item.description, itemX, y)
+          .text(item.quantity.toString(), quantityX, y)
+          .text(`$${Number(item.unitPrice).toFixed(2)}`, priceX, y)
+          .text(`$${amount.toFixed(2)}`, amountX, y);
+
+        y += 20;
+      });
+
+      // Add spacing
+      y += 20;
+
+      // Calculate totals
+      const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1;
+      const tax = subtotal * taxRate;
+      const total = subtotal + tax;
+
+      // Display totals
+      doc
+        .fontSize(10)
+        .text('Subtotal:', 400, y)
+        .text(`$${subtotal.toFixed(2)}`, amountX, y);
+      y += 20;
+
+      doc
+        .text(`Tax (${(taxRate * 100).toFixed(1)}%):`, 400, y)
+        .text(`$${tax.toFixed(2)}`, amountX, y);
+      y += 20;
+
+      doc
+        .fontSize(12)
+        .text('Total:', 400, y)
+        .text(`$${total.toFixed(2)}`, amountX, y);
+
+      // Add payment terms
+      y += 40;
+      doc
+        .fontSize(10)
+        .text('Payment Terms:', itemX, y)
+        .text('Please pay within 30 days of receiving this invoice.', itemX, y + 20);
+
+      // Draw a line under the headers
+      doc
+        .moveTo(itemX, tableTop + 15)
+        .lineTo(amountX + 50, tableTop + 15)
+        .stroke();
+
+      console.log('Finalizing PDF document');
+      doc.end();
+
     } catch (error) {
-      console.error('Error in dummy PDF generation:', error);
+      console.error('PDF generation failed:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       reject(error);
     }
   });
