@@ -122,7 +122,7 @@ async function isPortInUse(port: number): Promise<boolean> {
 async function startServer() {
   try {
     console.log('Starting server initialization...');
-    const PORT = 5000;
+    const PORT = process.env.PORT || 5000;
 
     // Check if port is already in use
     const portInUse = await isPortInUse(PORT);
