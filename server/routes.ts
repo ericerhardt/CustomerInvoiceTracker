@@ -735,15 +735,21 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
     // Import PDF generation function using dynamic import
     const { pdf } = await import('@react-pdf/renderer');
 
-    // Generate PDF buffer
-    const buffer = await pdf(pdfComponent).toBuffer();
+    try {
+      // Generate PDF buffer with explicit await
+      const pdfDoc = pdf(pdfComponent);
+      const buffer = await pdfDoc.toBuffer();
 
-    if (!buffer) {
-      throw new Error('PDF generation failed - empty buffer');
+      if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+        throw new Error('PDF generation failed - invalid buffer');
+      }
+
+      console.log('PDF generated successfully, buffer size:', buffer.length);
+      return buffer;
+    } catch (pdfRenderError) {
+      console.error('PDF rendering failed:', pdfRenderError);
+      throw new Error(`PDF rendering failed: ${pdfRenderError.message}`);
     }
-
-    console.log('PDF generated successfully, buffer size:', buffer.length);
-    return buffer;
   } catch (error) {
     console.error('PDF generation failed:', error);
     throw error;

@@ -88,15 +88,28 @@ export async function sendInvoiceEmail({
 
     // Add PDF attachment if buffer exists
     if (pdfBuffer && Buffer.isBuffer(pdfBuffer) && pdfBuffer.length > 0) {
-      msg.attachments = [{
-        content: pdfBuffer.toString('base64'),
-        filename: `invoice-${invoiceNumber}.pdf`,
-        type: 'application/pdf',
-        disposition: 'attachment'
-      }];
-      console.log('Added PDF attachment to email');
+      try {
+        const base64Content = pdfBuffer.toString('base64');
+        if (!base64Content) {
+          throw new Error("Failed to convert buffer to base64");
+        }
+        
+        msg.attachments = [{
+          content: base64Content,
+          filename: `invoice-${invoiceNumber}.pdf`,
+          type: 'application/pdf',
+          disposition: 'attachment'
+        }];
+        console.log('Added PDF attachment to email, size:', pdfBuffer.length);
+      } catch (base64Error) {
+        console.error('Failed to convert PDF to base64:', base64Error);
+      }
     } else {
-      console.warn('No PDF buffer available for attachment');
+      console.warn('No PDF buffer available for attachment', {
+        bufferExists: !!pdfBuffer,
+        isBuffer: pdfBuffer ? Buffer.isBuffer(pdfBuffer) : false,
+        bufferLength: pdfBuffer ? pdfBuffer.length : 0
+      });
     }
 
     // Send email
