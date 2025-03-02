@@ -5,6 +5,24 @@ import { verifyDatabaseConnection } from "./db";
 import { exec } from "child_process";
 import net from "net";
 
+// Add global error handlers for uncaught exceptions and unhandled rejections
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', {
+    error: error.message,
+    stack: error.stack,
+    name: error.name
+  });
+  // Don't exit the process, let it try to recover
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', {
+    reason: reason instanceof Error ? reason.message : reason,
+    stack: reason instanceof Error ? reason.stack : undefined
+  });
+  // Don't exit the process, let it try to recover
+});
+
 const app = express();
 
 // Create a separate router for non-webhook routes that will use JSON parsing

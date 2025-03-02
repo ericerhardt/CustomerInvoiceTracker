@@ -4,15 +4,12 @@ import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import Stripe from "stripe";
 import React from 'react';
-import { Document, pdf } from '@react-pdf/renderer';
-import { InvoicePDF } from '../client/src/components/InvoicePDF';
 import type { InvoiceItem } from "@shared/schema";
 import express from "express";
 import { users } from "@shared/schema";
 import { db } from "./db";
 import { sendInvoiceEmail } from "./email";
-import { session } from "passport";
-
+import PDFDocument from 'pdfkit';
 
 // Update the getStripe helper function to include better error handling
 async function getStripe(userId: number) {
@@ -159,6 +156,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         stack: error.stack
       });
       return res.status(400).send(`Webhook Error: ${error.message}`);
+    }
+  });
+
+  // Add test endpoint for PDF generation
+  app.get('/api/test-pdf', async (req, res) => {
+    try {
+      console.log('Testing PDF generation...');
+      const testData = {
+        items: [{
+          description: 'Test Item',
+          quantity: 1,
+          unitPrice: '10.00'
+        }],
+        customer: {
+          name: 'Test Customer',
+          email: 'test@example.com',
+          address: '123 Test St'
+        },
+        invoice: {
+          number: 'TEST-001',
+          dueDate: new Date(),
+        },
+        settings: {
+          companyName: 'Test Company',
+          companyAddress: '456 Company St',
+          companyEmail: 'company@example.com',
+          taxRate: '10.00'
+        }
+      };
+
+      const pdfBuffer = await generateInvoicePDF(
+        testData.items,
+        testData.customer,
+        testData.invoice,
+        testData.settings
+      );
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=test.pdf');
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error('PDF test endpoint failed:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      res.status(500).json({
+        error: 'PDF generation failed',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
@@ -722,94 +768,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 // Helper function for generating PDF
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any): Promise<Buffer> {
-  try {
-    console.log('Starting PDF generation with data:', {
-      hasItems: items?.length > 0,
-      hasCustomer: !!customer,
-      hasInvoice: !!invoice,
-      hasSettings: !!settings,
-      dueDate: invoice?.dueDate,
-      invoiceNumber: invoice?.number
-    });
-
-    if (!items?.length || !customer || !invoice) {
-      throw new Error('Missing required data for PDF generation');
-    }
-
-    // Ensure all numeric values are properly converted
-    const formattedItems = items.map(item => ({
-      description: item.description,
-      quantity: Number(item.quantity),
-      unitPrice: Number(item.unitPrice)
-    }));
-
-    // Format settings to ensure all required fields exist
-    const formattedSettings = settings ? {
-      companyName: settings.companyName || '',
-      companyAddress: settings.companyAddress || '',
-      companyEmail: settings.companyEmail || '',
-      taxRate: Number(settings.taxRate || 10)
-    } : undefined;
-
+  return new Promise((resolve, reject) => {
     try {
-      console.log('Creating PDF component with:', {
-        itemsCount: formattedItems.length,
-        dueDate: invoice.dueDate,
-        invoiceNumber: invoice.number
+      console.log('Starting PDF generation with data:', {
+        hasItems: items?.length > 0,
+        hasCustomer: !!customer,
+        hasInvoice: !!invoice,
+        hasSettings: !!settings,
+        dueDate: invoice?.dueDate,
+        invoiceNumber: invoice?.number
       });
 
-      // Create a simple test PDF first to verify basic functionality
-      const testPdf = await pdf(
-        React.createElement(Document, {},
-          React.createElement(Page, { size: "A4" },
-            React.createElement(View, {},
-              React.createElement(Text, {}, "Test PDF Generation")
-            )
-          )
-        )
-      ).toBuffer();
+      // Create a new PDF document
+      const doc = new PDFDocument({ margin: 50 });
 
-      if (!Buffer.isBuffer(testPdf)) {
-        throw new Error('Test PDF generation failed');
+      // Create a buffer to store the PDF
+      const chunks: Buffer[] = [];
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // Add company information
+      doc.fontSize(24).text('INVOICE', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12);
+
+      // Company details
+      doc.text(settings?.companyName || 'Your Company Name');
+      doc.text(settings?.companyAddress || '');
+      doc.text(settings?.companyEmail || '');
+      doc.moveDown();
+
+      // Invoice details
+      doc.text(`Invoice Number: ${invoice.number}`);
+      doc.text(`Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}`);
+      doc.moveDown();
+
+      // Customer information
+      if (customer) {
+        doc.text('Bill To:');
+        doc.text(customer.name);
+        doc.text(customer.address || '');
+        doc.text(customer.email);
+        doc.text(customer.phone || '');
+        doc.moveDown();
       }
 
-      console.log('Test PDF generated successfully, attempting full invoice PDF');
+      // Invoice items
+      const itemsStartY = doc.y;
+      let currentY = itemsStartY;
 
-      // If test succeeds, generate the full invoice PDF
-      const pdfBuffer = await pdf(
-        React.createElement(InvoicePDF, {
-          items: formattedItems,
-          customer,
-          dueDate: invoice.dueDate,
-          invoiceNumber: invoice.number,
-          settings: formattedSettings
-        })
-      ).toBuffer();
+      // Headers
+      const colWidths = {
+        description: 250,
+        quantity: 50,
+        unitPrice: 100,
+        amount: 100
+      };
 
-      if (!Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
-        throw new Error('PDF generation produced invalid buffer');
-      }
+      doc.text('Description', doc.x, currentY);
+      doc.text('Qty', doc.x + colWidths.description, currentY);
+      doc.text('Unit Price', doc.x + colWidths.description + colWidths.quantity, currentY);
+      doc.text('Amount', doc.x + colWidths.description + colWidths.quantity + colWidths.unitPrice, currentY);
 
-      console.log('PDF generated successfully:', {
-        bufferSize: pdfBuffer.length,
-        isBuffer: Buffer.isBuffer(pdfBuffer)
+      currentY += 20;
+
+      // Calculate totals
+      let subtotal = 0;
+
+      // Items
+      items.forEach(item => {
+        const amount = Number(item.quantity) * Number(item.unitPrice);
+        subtotal += amount;
+
+        doc.text(item.description, doc.x, currentY);
+        doc.text(item.quantity.toString(), doc.x + colWidths.description, currentY);
+        doc.text(`$${Number(item.unitPrice).toFixed(2)}`, doc.x + colWidths.description + colWidths.quantity, currentY);
+        doc.text(`$${amount.toFixed(2)}`, doc.x + colWidths.description + colWidths.quantity + colWidths.unitPrice, currentY);
+
+        currentY += 20;
       });
 
-      return pdfBuffer;
+      doc.moveDown();
+
+      // Totals
+      const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1;
+      const tax = subtotal * taxRate;
+      const total = subtotal + tax;
+
+      doc.text(`Subtotal: $${subtotal.toFixed(2)}`, { align: 'right' });
+      doc.text(`Tax (${(taxRate * 100).toFixed(1)}%): $${tax.toFixed(2)}`, { align: 'right' });
+      doc.text(`Total: $${total.toFixed(2)}`, { align: 'right' });
+
+      doc.moveDown();
+      doc.text('Payment Terms', { underline: true });
+      doc.text('Please pay within 30 days of receiving this invoice.');
+
+      // Finalize the PDF
+      doc.end();
+
     } catch (error) {
-      console.error('PDF rendering failed:', {
+      console.error('PDF generation failed:', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        errorType: error?.constructor?.name,
-        errorKeys: error ? Object.keys(error) : []
+        stack: error instanceof Error ? error.stack : undefined
       });
-      throw error;
+      reject(error);
     }
-  } catch (error) {
-    console.error('PDF generation failed:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    throw error;
-  }
+  });
 }
