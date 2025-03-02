@@ -549,8 +549,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate PDF
       let pdfBuffer: Buffer | undefined;
       try {
+        const items = await storage.getInvoiceItems(invoice.id);
         pdfBuffer = await generateInvoicePDF(items, customer, invoice, settings);
-        console.log('Generated PDF buffer:', !!pdfBuffer);
+        console.log('Generated PDF buffer:', !!pdfBuffer, 'size:', pdfBuffer?.length);
+        if (!pdfBuffer || !Buffer.isBuffer(pdfBuffer) || pdfBuffer.length === 0) {
+          console.error('PDF generation produced invalid buffer');
+        }
       } catch (pdfError) {
         console.error('Failed to generate PDF:', pdfError);
       }
@@ -708,6 +712,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
+// Generate PDF
 
 // Helper function for generating PDF
 async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any) {
@@ -733,11 +738,19 @@ async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: 
     });
 
     // Import PDF generation function using dynamic import
-    const { pdf } = await import('@react-pdf/renderer');
+    const { pdf, Document } = await import('@react-pdf/renderer');
+    // Wrap in Document component for proper PDF generation
+    const document = React.createElement(
+      Document,
+      null,
+      pdfComponent
+    );
 
     try {
       // Generate PDF buffer with explicit await
-      const pdfDoc = pdf(pdfComponent);
+      // Modify the function where the `pdfComponent` is created:
+      
+      const pdfDoc = pdf(document);
       const buffer = await pdfDoc.toBuffer();
 
       if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
