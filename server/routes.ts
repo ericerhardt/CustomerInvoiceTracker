@@ -3,7 +3,6 @@ import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import Stripe from "stripe";
-import React from 'react';
 import type { InvoiceItem } from "@shared/schema";
 import express from "express";
 import { users } from "@shared/schema";

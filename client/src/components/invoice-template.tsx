@@ -2,8 +2,6 @@ import { Customer, Settings } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
-import { PDFDownloadLink } from "@react-pdf/renderer";
-import { InvoicePDF } from "./InvoicePDF";
 import { useQuery } from "@tanstack/react-query";
 import {
   Table,
@@ -36,18 +34,30 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
     return sum + (quantity * price);
   }, 0);
 
-  // Convert taxRate from string to number before calculations
-  const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1; // Default to 10% if not set
-  const tax = Number((subtotal * taxRate).toFixed(2)); // Fix to 2 decimal places
-  const total = Number((subtotal + tax).toFixed(2)); // Fix to 2 decimal places
+  const taxRate = settings?.taxRate ? Number(settings.taxRate) / 100 : 0.1;
+  const tax = Number((subtotal * taxRate).toFixed(2));
+  const total = Number((subtotal + tax).toFixed(2));
 
-  // Convert settings for PDF generation
-  const pdfSettings = settings ? {
-    companyName: settings.companyName,
-    companyAddress: settings.companyAddress,
-    companyEmail: settings.companyEmail,
-    taxRate: Number(settings.taxRate) // Pass as number to InvoicePDF
-  } : undefined;
+  const handleDownloadPDF = async () => {
+    try {
+      const response = await fetch(`/api/invoices/${invoiceNumber}/pdf`, {
+        method: 'GET',
+      });
+      if (!response.ok) throw new Error('Failed to download PDF');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+    }
+  };
 
   return (
     <Card className="bg-white">
@@ -70,25 +80,10 @@ export function InvoiceTemplate({ items, customer, dueDate, invoiceNumber = "DRA
                 {settings?.companyEmail || 'contact@company.com'}
               </p>
             </div>
-            <PDFDownloadLink
-              document={
-                <InvoicePDF
-                  items={items}
-                  customer={customer}
-                  dueDate={dueDate}
-                  invoiceNumber={invoiceNumber}
-                  settings={pdfSettings}
-                />
-              }
-              fileName={`invoice-${invoiceNumber}.pdf`}
-            >
-              {({ loading }) => (
-                <Button disabled={loading} className="w-full">
-                  <Download className="mr-2 h-4 w-4" />
-                  {loading ? "Generating PDF..." : "Download PDF"}
-                </Button>
-              )}
-            </PDFDownloadLink>
+            <Button onClick={handleDownloadPDF} className="w-full">
+              <Download className="mr-2 h-4 w-4" />
+              Download PDF
+            </Button>
           </div>
         </div>
       </CardHeader>
