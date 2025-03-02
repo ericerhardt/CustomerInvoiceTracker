@@ -10,20 +10,17 @@ import { db } from "./db";
 import { sendInvoiceEmail } from "./email";
 import PDFDocument from 'pdfkit';
 
-// Update the getStripe helper function to include better error handling
-async function getStripe(userId: number) {
-  const settings = await storage.getSettingsByUserId(userId);
-  if (!settings?.stripeSecretKey) {
-    throw new Error("Stripe secret key not configured. Please add it in settings.");
-  }
-
-  if (!settings.stripeSecretKey.startsWith('sk_')) {
-    throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
-  }
-
-  return new Stripe(settings.stripeSecretKey, {
-    apiVersion: '2024-12-18.acacia' as any,
-    typescript: true,
+// Helper function for generating PDF
+async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    try {
+      console.log('PDF generation temporarily disabled, returning dummy buffer');
+      // Return a dummy buffer instead of generating PDF
+      resolve(Buffer.from('PDF generation temporarily disabled'));
+    } catch (error) {
+      console.error('Error in dummy PDF generation:', error);
+      reject(error);
+    }
   });
 }
 
@@ -765,16 +762,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   return httpServer;
 }
 
-// Helper function for generating PDF
-async function generateInvoicePDF(items: InvoiceItem[], customer: any, invoice: any, settings: any): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    try {
-      console.log('PDF generation temporarily disabled, returning dummy buffer');
-      // Return a dummy buffer instead of generating PDF
-      resolve(Buffer.from('PDF generation temporarily disabled'));
-    } catch (error) {
-      console.error('Error in dummy PDF generation:', error);
-      reject(error);
-    }
+//Helper function for getStripe
+async function getStripe(userId: number) {
+  const settings = await storage.getSettingsByUserId(userId);
+  if (!settings?.stripeSecretKey) {
+    throw new Error("Stripe secret key not configured. Please add it in settings.");
+  }
+
+  if (!settings.stripeSecretKey.startsWith('sk_')) {
+    throw new Error("Invalid Stripe secret key format. Must start with 'sk_'");
+  }
+
+  return new Stripe(settings.stripeSecretKey, {
+    apiVersion: '2024-12-18.acacia' as any,
+    typescript: true,
   });
 }
