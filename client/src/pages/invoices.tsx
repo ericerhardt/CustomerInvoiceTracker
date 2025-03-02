@@ -307,7 +307,7 @@ export default function InvoicesPage() {
                           <Link href={`/create-invoice/${invoice.id}`}>
                             <Button variant="outline" size="sm">
                               <Edit className="h-4 w-4 mr-1" />
-                              Edit
+                              {invoice.status === "paid" ? "View" : "Edit"}
                             </Button>
                           </Link>
                           {invoice.status !== "paid" && (

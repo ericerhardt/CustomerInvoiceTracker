@@ -59,15 +59,11 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
     resolver: zodResolver(insertInvoiceSchema),
     defaultValues: {
       customerId: invoice?.customerId || 0,
-      amount: invoice?.amount || 0,
-      dueDate: invoice?.dueDate
-        ? new Date(invoice.dueDate).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0],
+      amount: Number(invoice?.amount || 0),
+      dueDate: invoice?.dueDate || new Date().toISOString().split('T')[0],
       paymentMethod: invoice?.paymentMethod || "credit_card",
       checkNumber: invoice?.checkNumber || "",
-      checkReceivedDate: invoice?.checkReceivedDate
-        ? new Date(invoice.checkReceivedDate).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0],
+      checkReceivedDate: invoice?.checkReceivedDate || new Date().toISOString().split('T')[0],
     },
   });
 
@@ -80,7 +76,6 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
           ...data,
           paymentMethod: payByCheck ? "check" : "credit_card",
           checkNumber: payByCheck ? data.checkNumber : undefined,
-          // Send the date string directly, let the schema handle conversion
           checkReceivedDate: payByCheck && checkReceived ? data.checkReceivedDate : undefined,
           items: items.map(item => ({
             ...item,
@@ -133,6 +128,25 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
 
     form.setValue("amount", total);
   };
+
+  // Show only the invoice preview for paid invoices
+  if (invoice?.status === "paid") {
+    return (
+      <div className="space-y-8">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+          <p className="text-green-700">
+            This invoice has been paid. You can view the details below or download the PDF.
+          </p>
+        </div>
+        <InvoiceTemplate
+          items={items}
+          customer={customers?.find(c => c.id === form.getValues("customerId"))}
+          dueDate={form.getValues("dueDate")}
+          invoiceNumber={invoice.number}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -223,7 +237,6 @@ export function InvoiceForm({ onSuccess, invoice }: InvoiceFormProps) {
                         <Input
                           type="date"
                           {...field}
-                          value={field.value || new Date().toISOString().split('T')[0]}
                         />
                       </FormControl>
                       <FormMessage />

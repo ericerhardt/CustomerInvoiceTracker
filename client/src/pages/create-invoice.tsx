@@ -47,33 +47,41 @@ export default function CreateInvoice() {
 
       <main className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">
-          {id ? "Edit Invoice" : "Create Invoice"}
+          {invoice?.status === "paid" 
+            ? "View Invoice" 
+            : id ? "Edit Invoice" : "Create Invoice"}
         </h1>
 
         <Card>
           <CardHeader>
-            <CardTitle>Invoice Details</CardTitle>
+            <CardTitle>
+              {invoice?.status === "paid" ? "Invoice Details" : "Invoice Information"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="invoice">
-                  {id ? "Edit Invoice" : "Create Invoice"}
-                </TabsTrigger>
-                <TabsTrigger value="customer">New Customer</TabsTrigger>
-              </TabsList>
+            {invoice?.status === "paid" ? (
+              <InvoiceForm invoice={invoice} />
+            ) : (
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="invoice">
+                    {id ? "Edit Invoice" : "Create Invoice"}
+                  </TabsTrigger>
+                  <TabsTrigger value="customer">New Customer</TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="invoice">
-                <InvoiceForm 
-                  onSuccess={() => setActiveTab("invoice")} 
-                  invoice={invoice}
-                />
-              </TabsContent>
+                <TabsContent value="invoice">
+                  <InvoiceForm 
+                    onSuccess={() => setActiveTab("invoice")} 
+                    invoice={invoice}
+                  />
+                </TabsContent>
 
-              <TabsContent value="customer">
-                <CustomerForm onSuccess={() => setActiveTab("invoice")} />
-              </TabsContent>
-            </Tabs>
+                <TabsContent value="customer">
+                  <CustomerForm onSuccess={() => setActiveTab("invoice")} />
+                </TabsContent>
+              </Tabs>
+            )}
           </CardContent>
         </Card>
       </main>
